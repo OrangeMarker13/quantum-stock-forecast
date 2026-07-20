@@ -58,12 +58,12 @@ selected_ticker = st.sidebar.selectbox(
 
 forecast_days = st.sidebar.slider("Forecast Time Horizon (Days):", min_value=7, max_value=90, value=30)
 
-# Upgraded to support high-qubit scaling via Matrix Product State (MPS)
+# Capped at 16 Qubits to prevent system RAM Out-Of-Memory (OOM) crash
 num_qubits = st.sidebar.select_slider(
     "Quantum Register Resolution (Qubits):", 
-    options=[4, 8, 16, 32, 64, 100], 
-    value=16,
-    help="Scales resolution up to 100 qubits using Matrix Product State (MPS) Tensor Networks."
+    options=[4, 6, 8, 10, 12, 14, 16], 
+    value=8,
+    help="Higher qubit count increases grid resolution up to 65,536 discrete states."
 )
 
 shots = st.sidebar.selectbox("Quantum Measurement Shots:", [10000, 30000, 50000], index=1)
@@ -73,16 +73,22 @@ run_button = st.sidebar.button("⚡ Run Quantum Analysis", type="primary", use_c
 # --- QUANTUM SIMULATION ENGINE ---
 @st.cache_data(ttl=3600)
 def run_quantum_engine(ticker, days, qubits, measurement_shots):
-    df = yf.download(ticker, period="1y", progress=False)['Close']
+    # Fetch price data safely
+    ticker_data = yf.Ticker(ticker)
+    df_hist = ticker_data.history(period="1y")
     
-    if df.empty:
+    if df_hist.empty or 'Close' not in df_hist.columns:
         raise ValueError(f"No pricing data found for symbol '{ticker}'.")
         
-    log_returns = np.log(df / df.shift(1)).dropna()
+    close_prices = df_hist['Close'].dropna()
+    if len(close_prices) < 30:
+        raise ValueError(f"Insufficient historical data for symbol '{ticker}'.")
+
+    log_returns = np.log(close_prices / close_prices.shift(1)).dropna()
     
-    S0 = float(df.iloc[-1].values[0]) if isinstance(df.iloc[-1], pd.Series) else float(df.iloc[-1])
-    mu = float(log_returns.mean().values[0]) if isinstance(log_returns.mean(), pd.Series) else float(log_returns.mean())
-    sigma = float(log_returns.std().values[0]) if isinstance(log_returns.std(), pd.Series) else float(log_returns.std())
+    S0 = float(close_prices.iloc[-1])
+    mu = float(log_returns.mean())
+    sigma = float(log_returns.std())
     ann_vol = sigma * np.sqrt(252) * 100
     
     dt = days / 252
@@ -95,6 +101,10 @@ def run_quantum_engine(ticker, days, qubits, measurement_shots):
     
     drift = (mu - 0.5 * sigma**2) * dt
     scale = sigma * np.sqrt(dt)
+    
+    if scale == 0:
+        scale = 1e-6
+        
     probs = np.exp(- (np.log(price_grid / S0) - drift)**2 / (2 * scale**2))
     probs /= np.sum(probs)
     
@@ -125,6 +135,8 @@ def run_quantum_engine(ticker, days, qubits, measurement_shots):
     
     cdf = np.cumsum(quantum_probs)
     var_95_idx = np.searchsorted(cdf, 0.05)
+    var_95_idx = min(var_95_idx, len(pct_grid) - 1)
+    
     var_95_pct = pct_grid[var_95_idx]
     var_95_price = price_grid[var_95_idx]
     
@@ -144,14 +156,16 @@ def run_quantum_engine(ticker, days, qubits, measurement_shots):
         'var_95_pct': var_95_pct, 'var_95_price': var_95_price,
         'etl_pct': etl_pct, 'expected_tail_loss': expected_tail_loss,
         'prob_up_5': prob_up_5, 'prob_down_5': prob_down_5, 'prob_positive': prob_positive,
-        'df': df, 'cdf': cdf
+        'df': close_prices, 'cdf': cdf
     }
 
 # Safe Execution Engine Call
 try:
-    data = run_quantum_engine(selected_ticker, forecast_days, num_qubits, shots)
+    with st.spinner(f"Running Quantum Monte Carlo Simulation for {selected_ticker}..."):
+        data = run_quantum_engine(selected_ticker, forecast_days, num_qubits, shots)
 except Exception as e:
-    st.error(f"❌ **Error loading ticker '{selected_ticker}':** Please verify that the symbol is valid on Yahoo Finance (e.g., AAPL, NVDA, SPY, BTC-USD).")
+    st.error(f"❌ **Simulation Error:** {str(e)}")
+    st.info("💡 **Tip:** Verify that the ticker symbol exists on Yahoo Finance (e.g. AAPL, SPY, NVDA, BTC-USD).")
     st.stop()
 
 # --- TOP SUMMARY METRICS CARD ---
@@ -179,7 +193,7 @@ with tab1:
     
     time_axis = np.arange(0, forecast_days + 1)
     pcts = [0.05, 0.20, 0.35, 0.50, 0.65, 0.80, 0.95]
-    vals_target = [((data['price_grid'][np.searchsorted(data['cdf'], p)] - data['S0']) / data['S0']) * 100 for p in pcts]
+    vals_target = [((data['price_grid'][min(np.searchsorted(data['cdf'], p), len(data['price_grid'])-1)] - data['S0']) / data['S0']) * 100 for p in pcts]
     time_factor = np.sqrt(time_axis / forecast_days)
     
     p5, p20, p35, p50, p65, p80, p95 = [v * time_factor for v in vals_target]
