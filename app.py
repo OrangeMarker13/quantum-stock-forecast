@@ -34,8 +34,8 @@ st.markdown("""
 # --- APP HEADER ---
 st.title("⚛️ Quantum Equity Research & Risk Analytics Engine")
 st.markdown("""
-This platform uses **Qiskit Aer Quantum Circuit Simulators** to model asset price paths via **Quantum Monte Carlo**. 
-By encoding log-normal probability amplitudes into qubit registers via **quantum superposition**, we evaluate projected price targets and downside tail-risk metrics.
+This platform uses **Qiskit Aer Matrix Product State (MPS)** tensor network simulators to model asset price paths via **High-Qubit Quantum Monte Carlo**. 
+By encoding probability amplitudes across scaled qubit registers, we evaluate projected price targets and downside tail-risk metrics.
 """)
 
 st.divider()
@@ -57,7 +57,15 @@ selected_ticker = st.sidebar.selectbox(
 ).upper().strip()
 
 forecast_days = st.sidebar.slider("Forecast Time Horizon (Days):", min_value=7, max_value=90, value=30)
-num_qubits = st.sidebar.select_slider("Quantum Register Resolution (Qubits):", options=[4, 6, 8], value=6)
+
+# Upgraded to support high-qubit scaling via Matrix Product State (MPS)
+num_qubits = st.sidebar.select_slider(
+    "Quantum Register Resolution (Qubits):", 
+    options=[4, 8, 16, 32, 64, 100], 
+    value=16,
+    help="Scales resolution up to 100 qubits using Matrix Product State (MPS) Tensor Networks."
+)
+
 shots = st.sidebar.selectbox("Quantum Measurement Shots:", [10000, 30000, 50000], index=1)
 
 run_button = st.sidebar.button("⚡ Run Quantum Analysis", type="primary", use_container_width=True)
@@ -100,7 +108,11 @@ def run_quantum_engine(ticker, days, qubits, measurement_shots):
         qc.ry(angles[i], qreg[i])
     qc.measure(qreg, creg)
     
-    backend = AerSimulator()
+    # Configure Matrix Product State (MPS) Tensor Network Backend
+    backend = AerSimulator(
+        method='matrix_product_state',
+        matrix_product_state_truncation_threshold=1e-6
+    )
     job = backend.run(qc, shots=measurement_shots)
     counts = job.result().get_counts()
     
