@@ -49,12 +49,18 @@ popular_tickers = [
     "NFLX", "AMD", "COIN", "SPY", "QQQ", "^GSPC", "BTC-USD"
 ]
 
-selected_ticker = st.sidebar.selectbox(
-    "Select or Type Target Asset Ticker:",
-    options=popular_tickers,
-    index=0,
-    accept_new_options=True
-).upper().strip()
+33 selected_ticker = st.sidebar.selectbox(
+34     "Select or Type Target Asset Ticker:",
+35     options=popular_tickers,
+36     index=0,
+37     accept_new_options=True
+38 ).upper().strip()
+
+39 # Validate ticker before running engine
+40 test_df = yf.download(selected_ticker, period="1y", progress=False)
+41 if test_df.empty:
+42     st.sidebar.error(f"❌ '{selected_ticker}' is not a valid Yahoo Finance ticker.")
+43     st.stop()
 
 # NEW: User-controlled forecast days
 forecast_days = st.sidebar.slider(
@@ -78,8 +84,7 @@ shots = st.sidebar.selectbox("Quantum Measurement Shots:", [10000, 30000, 50000]
 if num_qubits > 14 and shots > 30000:
     st.sidebar.warning("High qubit count + high shots may slow down simulation.")
 
-run_button = st.sidebar.button("⚡ Run Quantum Analysis", type="primary", use_container_width=True)
-
+run_button = st.sidebar.button("⚡ Run Quantum Analysis", type="primary", width="stretch")
 
 # --- QUANTUM SIMULATION ENGINE ---
 @st.cache_data(ttl=3600)
@@ -91,9 +96,10 @@ def run_quantum_engine(ticker, days, qubits, measurement_shots):
         
     log_returns = np.log(df / df.shift(1)).dropna()
     
-    S0 = float(df.iloc[-1].values[0]) if isinstance(df.iloc[-1], pd.Series) else float(df.iloc[-1])
-    mu = float(log_returns.mean().values[0]) if isinstance(log_returns.mean(), pd.Series) else float(log_returns.mean())
-    sigma = float(log_returns.std().values[0]) if isinstance(log_returns.std(), pd.Series) else float(log_returns.std())
+    S0 = float(df.iloc[-1])
+    mu = float(log_returns.mean())
+    sigma = float(log_returns.std())
+
     ann_vol = sigma * np.sqrt(252) * 100
     
     dt = days / 252
@@ -109,15 +115,14 @@ def run_quantum_engine(ticker, days, qubits, measurement_shots):
     probs = np.exp(- (np.log(price_grid / S0) - drift)**2 / (2 * scale**2))
     probs /= np.sum(probs)
     
-    angles = 2 * np.arcsin(np.sqrt(probs))
     qreg = QuantumRegister(qubits, 'q')
     creg = ClassicalRegister(qubits, 'c')
     qc = QuantumCircuit(qreg, creg)
-    
-    for i in range(qubits):
-        qc.h(qreg[i])
-        qc.ry(angles[i], qreg[i])
+
+    # Proper amplitude encoding of full probability distribution
+    qc.initialize(np.sqrt(probs), qreg)
     qc.measure(qreg, creg)
+
     
     # Configure Matrix Product State (MPS) Tensor Network Backend
     backend = AerSimulator(
@@ -267,4 +272,5 @@ with tab4:
         "Quantum Probability Mass": data['quantum_probs'],
         "Cumulative Probability (CDF)": data['cdf']
     })
-    st.dataframe(df_raw, use_container_width=True)
+    st.dataframe(df_raw, width="stretch")
+
