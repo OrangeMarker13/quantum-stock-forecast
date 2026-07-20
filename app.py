@@ -49,18 +49,18 @@ popular_tickers = [
     "NFLX", "AMD", "COIN", "SPY", "QQQ", "^GSPC", "BTC-USD"
 ]
 
-33 selected_ticker = st.sidebar.selectbox(
-34     "Select or Type Target Asset Ticker:",
-35     options=popular_tickers,
-36     index=0,
-37     accept_new_options=True
-38 ).upper().strip()
+selected_ticker = st.sidebar.selectbox(
+    "Select or Type Target Asset Ticker:",
+    options=popular_tickers,
+    index=0,
+    accept_new_options=True
+).upper().strip()
 
-39 # Validate ticker before running engine
-40 test_df = yf.download(selected_ticker, period="1y", progress=False)
-41 if test_df.empty:
-42     st.sidebar.error(f"❌ '{selected_ticker}' is not a valid Yahoo Finance ticker.")
-43     st.stop()
+# Validate ticker before running engine
+test_df = yf.download(selected_ticker, period="1y", progress=False)
+if test_df.empty:
+    st.sidebar.error(f"❌ '{selected_ticker}' is not a valid Yahoo Finance ticker.")
+    st.stop()
 
 # NEW: User-controlled forecast days
 forecast_days = st.sidebar.slider(
