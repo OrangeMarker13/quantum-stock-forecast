@@ -43,11 +43,18 @@ st.divider()
 # --- SIDEBAR INTERACTIVE CONTROLS ---
 st.sidebar.header("🛠️ Simulation Controls")
 
+popular_tickers = [
+    "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA", 
+    "BRK-B", "JPM", "V", "UNH", "PG", "MA", "HD", "DIS", 
+    "NFLX", "AMD", "COIN", "SPY", "QQQ", "^GSPC", "BTC-USD"
+]
+
 selected_ticker = st.sidebar.selectbox(
-    "Select Target Asset:",
-    ["AAPL", "MSFT", "GOOGL", "NVDA", "TSLA", "AMZN", "META", "^GSPC"],
-    index=0
-)
+    "Select or Type Target Asset Ticker:",
+    options=popular_tickers,
+    index=0,
+    accept_new_options=True
+).upper().strip()
 
 forecast_days = st.sidebar.slider("Forecast Time Horizon (Days):", min_value=7, max_value=90, value=30)
 num_qubits = st.sidebar.select_slider("Quantum Register Resolution (Qubits):", options=[4, 6, 8], value=6)
@@ -59,6 +66,10 @@ run_button = st.sidebar.button("⚡ Run Quantum Analysis", type="primary", use_c
 @st.cache_data(ttl=3600)
 def run_quantum_engine(ticker, days, qubits, measurement_shots):
     df = yf.download(ticker, period="1y", progress=False)['Close']
+    
+    if df.empty:
+        raise ValueError(f"No pricing data found for symbol '{ticker}'.")
+        
     log_returns = np.log(df / df.shift(1)).dropna()
     
     S0 = float(df.iloc[-1].values[0]) if isinstance(df.iloc[-1], pd.Series) else float(df.iloc[-1])
@@ -124,14 +135,18 @@ def run_quantum_engine(ticker, days, qubits, measurement_shots):
         'df': df, 'cdf': cdf
     }
 
-# Execute Engine
-data = run_quantum_engine(selected_ticker, forecast_days, num_qubits, shots)
+# Safe Execution Engine Call
+try:
+    data = run_quantum_engine(selected_ticker, forecast_days, num_qubits, shots)
+except Exception as e:
+    st.error(f"❌ **Error loading ticker '{selected_ticker}':** Please verify that the symbol is valid on Yahoo Finance (e.g., AAPL, NVDA, SPY, BTC-USD).")
+    st.stop()
 
 # --- TOP SUMMARY METRICS CARD ---
 col1, col2, col3, col4, col5 = st.columns(5)
 
 col1.metric("Current Price", f"${data['S0']:.2f}")
-col2.metric("30-Day Quantum Target", f"${data['expected_price']:.2f}", f"{data['expected_pct']:+.2f}%")
+col2.metric(f"{forecast_days}-Day Quantum Target", f"${data['expected_price']:.2f}", f"{data['expected_pct']:+.2f}%")
 col3.metric("Annualized Volatility", f"{data['ann_vol']:.1f}%")
 col4.metric("95% Value at Risk (VaR)", f"{data['var_95_pct']:.2f}%")
 col5.metric("Win Probability (>0%)", f"{data['prob_positive']:.1f}%")
@@ -148,14 +163,14 @@ tab1, tab2, tab3, tab4 = st.tabs([
 
 # TAB 1: TRAJECTORY FAN CHART
 with tab1:
-    st.subheader(f"30-Day Cone of Uncertainty ({selected_ticker})")
+    st.subheader(f"{forecast_days}-Day Cone of Uncertainty ({selected_ticker})")
     
     time_axis = np.arange(0, forecast_days + 1)
     pcts = [0.05, 0.20, 0.35, 0.50, 0.65, 0.80, 0.95]
-    vals_30 = [((data['price_grid'][np.searchsorted(data['cdf'], p)] - data['S0']) / data['S0']) * 100 for p in pcts]
+    vals_target = [((data['price_grid'][np.searchsorted(data['cdf'], p)] - data['S0']) / data['S0']) * 100 for p in pcts]
     time_factor = np.sqrt(time_axis / forecast_days)
     
-    p5, p20, p35, p50, p65, p80, p95 = [v * time_factor for v in vals_30]
+    p5, p20, p35, p50, p65, p80, p95 = [v * time_factor for v in vals_target]
     
     fig, ax = plt.subplots(figsize=(10, 4.5))
     ax.fill_between(time_axis, p35, p65, color='#1f77b4', alpha=0.6, label='High Probability Core (30%)')
@@ -205,7 +220,7 @@ with tab3:
     
     if data['expected_pct'] > 1.5 and data['prob_positive'] > 55:
         signal = "🟢 BULLISH OUTLOOK"
-        signal_desc = "The Quantum Monte Carlo register exhibits positive distribution drift, indicating favorable risk-adjusted upside potential over the 30-day horizon."
+        signal_desc = f"The Quantum Monte Carlo register exhibits positive distribution drift, indicating favorable risk-adjusted upside potential over the {forecast_days}-day horizon."
     elif data['expected_pct'] < -1.5 or data['prob_down_5'] > 30:
         signal = "🔴 BEARISH / CAUTION"
         signal_desc = "The simulation indicates downside skew and elevated tail-risk. Investors should consider hedging exposure."
@@ -217,7 +232,7 @@ with tab3:
     st.info(signal_desc)
     
     st.markdown("#### Key Takeaways for Traders & Analysts")
-    st.write(f"1. **Volatility Environment:** {selected_ticker} exhibits an annualized volatility of **{data['ann_vol']:.1f}%**. This translates to a 30-day projected standard deviation spread of **±{data['ann_vol']/np.sqrt(12):.1f}%**.")
+    st.write(f"1. **Volatility Environment:** {selected_ticker} exhibits an annualized volatility of **{data['ann_vol']:.1f}%**. This translates to a {forecast_days}-day projected standard deviation spread of **±{data['ann_vol']/np.sqrt(12):.1f}%**.")
     st.write(f"2. **Asymmetry Ratio:** The probability of experiencing a **+5% rally ({data['prob_up_5']:.1f}%)** versus a **-5% decline ({data['prob_down_5']:.1f}%)** yields a risk-reward skew factor of **{(data['prob_up_5']/(data['prob_down_5']+1e-5)):.2f}**.")
 
 # TAB 4: RAW DATA
