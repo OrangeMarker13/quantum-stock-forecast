@@ -1,11 +1,13 @@
+import traceback
 import streamlit as st
 import numpy as np
 import pandas as pd
 import yfinance as yf
 import matplotlib.pyplot as plt
 
+# --- QISKIT CORE IMPORTS (Pure Python Backend - No Aer Build Crashes) ---
 from qiskit import QuantumCircuit, QuantumRegister, ClassicalRegister
-from qiskit_aer import AerSimulator
+from qiskit.quantum_info import Statevector
 
 # --- STREAMLIT PAGE CONFIGURATION ---
 st.set_page_config(
@@ -15,7 +17,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS for polished financial styling
+# Custom CSS
 st.markdown("""
     <style>
     .metric-card {
@@ -34,13 +36,12 @@ st.markdown("""
 # --- APP HEADER ---
 st.title("⚛️ Quantum Equity Research & Risk Analytics Engine")
 st.markdown("""
-This platform uses **Qiskit Aer Matrix Product State (MPS)** tensor network simulators to model asset price paths via **High-Qubit Quantum Monte Carlo**. 
-By encoding probability amplitudes across scaled qubit registers, we evaluate projected price targets and downside tail-risk metrics.
+This platform constructs **Qiskit Quantum Circuits** to encode asset price probabilities via **Quantum Statevector Amplitude Encoding** and **Quantum Measurement Sampling**.
 """)
 
 st.divider()
 
-# --- SIDEBAR INTERACTIVE CONTROLS ---
+# --- SIDEBAR CONTROLS ---
 st.sidebar.header("🛠️ Simulation Controls")
 
 popular_tickers = [
@@ -58,27 +59,25 @@ selected_ticker = st.sidebar.selectbox(
 
 forecast_days = st.sidebar.slider("Forecast Time Horizon (Days):", min_value=7, max_value=90, value=30)
 
-# Capped at 16 Qubits to prevent system RAM Out-Of-Memory (OOM) crash
+# Capped safely at 10 qubits for pure-python quantum statevector calculation
 num_qubits = st.sidebar.select_slider(
     "Quantum Register Resolution (Qubits):", 
-    options=[4, 6, 8, 10, 12, 14, 16], 
+    options=[4, 6, 8, 10], 
     value=8,
-    help="Higher qubit count increases grid resolution up to 65,536 discrete states."
+    help="Determines the length of the quantum register (2^N states)."
 )
 
 shots = st.sidebar.selectbox("Quantum Measurement Shots:", [10000, 30000, 50000], index=1)
 
-run_button = st.sidebar.button("⚡ Run Quantum Analysis", type="primary", use_container_width=True)
-
-# --- QUANTUM SIMULATION ENGINE ---
+# --- QUANTUM SIMULATION ENGINE (QISKIT STATEVECTOR) ---
 @st.cache_data(ttl=3600)
 def run_quantum_engine(ticker, days, qubits, measurement_shots):
-    # Fetch price data safely
+    # 1. Fetch Price Data
     ticker_data = yf.Ticker(ticker)
     df_hist = ticker_data.history(period="1y")
     
     if df_hist.empty or 'Close' not in df_hist.columns:
-        raise ValueError(f"No pricing data found for symbol '{ticker}'.")
+        raise ValueError(f"No pricing data found for symbol '{ticker}'. Verify ticker on Yahoo Finance.")
         
     close_prices = df_hist['Close'].dropna()
     if len(close_prices) < 30:
@@ -94,6 +93,7 @@ def run_quantum_engine(ticker, days, qubits, measurement_shots):
     dt = days / 252
     num_states = 2**qubits
     
+    # 2. Price Grid & Target Amplitude Setup
     min_price = S0 * np.exp((mu - 0.5 * sigma**2) * dt - 3 * sigma * np.sqrt(dt))
     max_price = S0 * np.exp((mu - 0.5 * sigma**2) * dt + 3 * sigma * np.sqrt(dt))
     price_grid = np.linspace(min_price, max_price, num_states)
@@ -101,35 +101,38 @@ def run_quantum_engine(ticker, days, qubits, measurement_shots):
     
     drift = (mu - 0.5 * sigma**2) * dt
     scale = sigma * np.sqrt(dt)
-    
     if scale == 0:
         scale = 1e-6
         
     probs = np.exp(- (np.log(price_grid / S0) - drift)**2 / (2 * scale**2))
     probs /= np.sum(probs)
-    
-    angles = 2 * np.arcsin(np.sqrt(probs))
+    amplitudes = np.sqrt(probs)
+    amplitudes /= np.linalg.norm(amplitudes) # Normalize quantum state
+
+    # 3. Construct Qiskit Quantum Circuit
     qreg = QuantumRegister(qubits, 'q')
-    creg = ClassicalRegister(qubits, 'c')
-    qc = QuantumCircuit(qreg, creg)
+    qc = QuantumCircuit(qreg)
     
-    for i in range(qubits):
-        qc.h(qreg[i])
-        qc.ry(angles[i], qreg[i])
-    qc.measure(qreg, creg)
+    # Initialize quantum register with amplitude distribution
+    qc.initialize(amplitudes, qreg)
     
-    # Configure Matrix Product State (MPS) Tensor Network Backend
-    backend = AerSimulator(
-        method='matrix_product_state',
-        matrix_product_state_truncation_threshold=1e-6
-    )
-    job = backend.run(qc, shots=measurement_shots)
-    counts = job.result().get_counts()
+    # Evolve & Measure Quantum Statevector
+    statevector = Statevector.from_instruction(qc)
+    measurement_dict = statevector.sample_counts(shots=measurement_shots)
     
     quantum_probs = np.zeros(num_states)
-    for bitstring, count in counts.items():
-        quantum_probs[int(bitstring, 2)] = count / measurement_shots
-        
+    for bitstring, count in measurement_dict.items():
+        state_index = int(bitstring, 2)
+        if state_index < num_states:
+            quantum_probs[state_index] = count / measurement_shots
+            
+    # Normalize probabilities
+    if np.sum(quantum_probs) > 0:
+        quantum_probs /= np.sum(quantum_probs)
+    else:
+        quantum_probs = probs
+
+    # 4. Compute Financial Metrics
     expected_price = np.sum(price_grid * quantum_probs)
     expected_pct = ((expected_price - S0) / S0) * 100
     
@@ -156,41 +159,34 @@ def run_quantum_engine(ticker, days, qubits, measurement_shots):
         'var_95_pct': var_95_pct, 'var_95_price': var_95_price,
         'etl_pct': etl_pct, 'expected_tail_loss': expected_tail_loss,
         'prob_up_5': prob_up_5, 'prob_down_5': prob_down_5, 'prob_positive': prob_positive,
-        'df': close_prices, 'cdf': cdf
+        'df': close_prices, 'cdf': cdf, 'qubits': qubits
     }
 
-# Safe Execution Engine Call
+# Safe Execution Engine Call with Debug Catching
 try:
-    with st.spinner(f"Running Quantum Monte Carlo Simulation for {selected_ticker}..."):
+    with st.spinner(f"Running Qiskit Quantum Circuit Simulation for {selected_ticker}..."):
         data = run_quantum_engine(selected_ticker, forecast_days, num_qubits, shots)
 except Exception as e:
     st.error(f"❌ **Simulation Error:** {str(e)}")
-    st.info("💡 **Tip:** Verify that the ticker symbol exists on Yahoo Finance (e.g. AAPL, SPY, NVDA, BTC-USD).")
+    with st.expander("🔍 Click to view technical error traceback"):
+        st.code(traceback.format_exc())
     st.stop()
 
-# --- TOP SUMMARY METRICS CARD ---
+# --- SUMMARY METRICS ---
 col1, col2, col3, col4, col5 = st.columns(5)
-
 col1.metric("Current Price", f"${data['S0']:.2f}")
-col2.metric(f"{forecast_days}-Day Quantum Target", f"${data['expected_price']:.2f}", f"{data['expected_pct']:+.2f}%")
+col2.metric(f"{forecast_days}-Day Target", f"${data['expected_price']:.2f}", f"{data['expected_pct']:+.2f}%")
 col3.metric("Annualized Volatility", f"{data['ann_vol']:.1f}%")
-col4.metric("95% Value at Risk (VaR)", f"{data['var_95_pct']:.2f}%")
-col5.metric("Win Probability (>0%)", f"{data['prob_positive']:.1f}%")
+col4.metric("95% Value at Risk", f"{data['var_95_pct']:.2f}%")
+col5.metric("Win Probability", f"{data['prob_positive']:.1f}%")
 
 st.divider()
 
-# --- MULTI-TAB DETAILED ANALYSIS ---
-tab1, tab2, tab3, tab4 = st.tabs([
-    "📊 Forecast Trajectory", 
-    "📈 Risk & Probability Distribution", 
-    "📑 Executive Report & Signal", 
-    "📜 Raw Simulation Data"
-])
+# --- TABS ---
+tab1, tab2, tab3 = st.tabs(["📊 Forecast Trajectory", "📈 Quantum Probability Density", "📑 Executive Summary"])
 
-# TAB 1: TRAJECTORY FAN CHART
 with tab1:
-    st.subheader(f"{forecast_days}-Day Cone of Uncertainty ({selected_ticker})")
-    
+    st.subheader(f"{forecast_days}-Day Quantum Cone of Uncertainty ({selected_ticker})")
     time_axis = np.arange(0, forecast_days + 1)
     pcts = [0.05, 0.20, 0.35, 0.50, 0.65, 0.80, 0.95]
     vals_target = [((data['price_grid'][min(np.searchsorted(data['cdf'], p), len(data['price_grid'])-1)] - data['S0']) / data['S0']) * 100 for p in pcts]
@@ -198,76 +194,33 @@ with tab1:
     
     p5, p20, p35, p50, p65, p80, p95 = [v * time_factor for v in vals_target]
     
-    fig, ax = plt.subplots(figsize=(10, 4.5))
-    ax.fill_between(time_axis, p35, p65, color='#1f77b4', alpha=0.6, label='High Probability Core (30%)')
-    ax.fill_between(time_axis, p20, p35, color='#1f77b4', alpha=0.35)
-    ax.fill_between(time_axis, p65, p80, color='#1f77b4', alpha=0.35)
-    ax.fill_between(time_axis, p5,  p20, color='#1f77b4', alpha=0.15, label='Extreme Tails (5%-95%)')
-    ax.fill_between(time_axis, p80, p95, color='#1f77b4', alpha=0.15)
-    
-    ax.plot(time_axis, p50, color='#0a385c', linewidth=2.5, label='Median Path')
+    fig, ax = plt.subplots(figsize=(10, 4))
+    ax.fill_between(time_axis, p35, p65, color='#1f77b4', alpha=0.6, label='Core Range (30%)')
+    ax.fill_between(time_axis, p5, p95, color='#1f77b4', alpha=0.15, label='Tail Range (90%)')
+    ax.plot(time_axis, p50, color='#0a385c', linewidth=2, label='Median Target')
     ax.axhline(0, color='red', linestyle='--', alpha=0.7)
-    ax.plot(0, 0, marker='o', color='red', markersize=6)
-    
     ax.set_ylabel("Projected Return (%)")
     ax.set_xlabel("Days Ahead")
-    ax.grid(True, alpha=0.25)
+    ax.grid(True, alpha=0.2)
     ax.legend(loc='upper left')
     st.pyplot(fig)
 
-# TAB 2: PROBABILITY & RISK
 with tab2:
-    st.subheader("Quantum Probability Density & Risk Metrics")
-    col_a, col_b = st.columns([2, 1])
-    
-    with col_a:
-        fig2, ax2 = plt.subplots(figsize=(8, 4))
-        ax2.plot(data['pct_grid'], data['quantum_probs'], color='#1f77b4', linewidth=2)
-        ax2.fill_between(data['pct_grid'], data['quantum_probs'], color='#1f77b4', alpha=0.3)
-        ax2.axvline(data['expected_pct'], color='green', linestyle='-', label=f"Expected: {data['expected_pct']:+.2f}%")
-        ax2.axvline(data['var_95_pct'], color='red', linestyle='--', label=f"95% VaR: {data['var_95_pct']:.2f}%")
-        ax2.set_xlabel("Projected Price Change (%)")
-        ax2.set_ylabel("Quantum Probability Mass")
-        ax2.grid(True, alpha=0.25)
-        ax2.legend()
-        st.pyplot(fig2)
-        
-    with col_b:
-        st.markdown("### Risk Breakdown")
-        st.write(f"**Expected Price Target:** ${data['expected_price']:.2f}")
-        st.write(f"**95% Value at Risk (Dollar):** -${abs((data['var_95_price'] - data['S0'])):.2f}")
-        st.write(f"**Expected Tail Loss (ETL):** {data['etl_pct']:.2f}%")
-        st.write(f"**Probability of Gain > +5%:** {data['prob_up_5']:.1f}%")
-        st.write(f"**Probability of Loss > -5%:** {data['prob_down_5']:.1f}%")
+    st.subheader(f"Qiskit Circuit Output ({data['qubits']} Qubits = {2**data['qubits']} Discrete States)")
+    fig2, ax2 = plt.subplots(figsize=(8, 3.5))
+    ax2.plot(data['pct_grid'], data['quantum_probs'], color='#1f77b4', linewidth=2)
+    ax2.fill_between(data['pct_grid'], data['quantum_probs'], color='#1f77b4', alpha=0.3)
+    ax2.axvline(data['expected_pct'], color='green', linestyle='-', label=f"Expected Target: {data['expected_pct']:+.2f}%")
+    ax2.axvline(data['var_95_pct'], color='red', linestyle='--', label=f"95% VaR: {data['var_95_pct']:.2f}%")
+    ax2.set_xlabel("Return (%)")
+    ax2.set_ylabel("Quantum Probability Mass")
+    ax2.grid(True, alpha=0.2)
+    ax2.legend()
+    st.pyplot(fig2)
 
-# TAB 3: EXECUTIVE SUMMARY REPORT
 with tab3:
-    st.subheader(f"Automated Quantum Equity Report: {selected_ticker}")
-    
-    if data['expected_pct'] > 1.5 and data['prob_positive'] > 55:
-        signal = "🟢 BULLISH OUTLOOK"
-        signal_desc = f"The Quantum Monte Carlo register exhibits positive distribution drift, indicating favorable risk-adjusted upside potential over the {forecast_days}-day horizon."
-    elif data['expected_pct'] < -1.5 or data['prob_down_5'] > 30:
-        signal = "🔴 BEARISH / CAUTION"
-        signal_desc = "The simulation indicates downside skew and elevated tail-risk. Investors should consider hedging exposure."
-    else:
-        signal = "🟡 NEUTRAL / CONSOLIDATION"
-        signal_desc = "The forecast distribution remains tightly clustered around current levels with symmetric variance."
-
-    st.markdown(f"### Overall Assessment: **{signal}**")
-    st.info(signal_desc)
-    
-    st.markdown("#### Key Takeaways for Traders & Analysts")
-    st.write(f"1. **Volatility Environment:** {selected_ticker} exhibits an annualized volatility of **{data['ann_vol']:.1f}%**. This translates to a {forecast_days}-day projected standard deviation spread of **±{data['ann_vol']/np.sqrt(12):.1f}%**.")
-    st.write(f"2. **Asymmetry Ratio:** The probability of experiencing a **+5% rally ({data['prob_up_5']:.1f}%)** versus a **-5% decline ({data['prob_down_5']:.1f}%)** yields a risk-reward skew factor of **{(data['prob_up_5']/(data['prob_down_5']+1e-5)):.2f}**.")
-
-# TAB 4: RAW DATA
-with tab4:
-    st.subheader("Raw Output Matrix (Quantum Bins)")
-    df_raw = pd.DataFrame({
-        "Price Outcome ($)": data['price_grid'],
-        "Return (%)": data['pct_grid'],
-        "Quantum Probability Mass": data['quantum_probs'],
-        "Cumulative Probability (CDF)": data['cdf']
-    })
-    st.dataframe(df_raw, use_container_width=True)
+    st.markdown(f"### Qiskit Analysis for **{selected_ticker}**")
+    st.write(f"- **Expected Return:** {data['expected_pct']:+.2f}%")
+    st.write(f"- **Annualized Volatility:** {data['ann_vol']:.1f}%")
+    st.write(f"- **95% Value-at-Risk:** {data['var_95_pct']:.2f}%")
+    st.write(f"- **Probability of Upside (>0%):** {data['prob_positive']:.1f}%")
