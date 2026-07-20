@@ -5,3 +5,4 @@ yfinance
 matplotlib
 qiskit
 qiskit-aer
+qiskit-optimization
