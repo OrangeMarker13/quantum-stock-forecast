@@ -56,17 +56,30 @@ selected_ticker = st.sidebar.selectbox(
     accept_new_options=True
 ).upper().strip()
 
-# Locked to 30 Days as requested
-forecast_days = 30
-st.sidebar.info("Forecast Time Horizon (Days): 30 (Locked)")
+# NEW: User-controlled forecast days
+forecast_days = st.sidebar.slider(
+    "Forecast Time Horizon (Days):",
+    min_value=1,
+    max_value=30,
+    value=30
+)
 
-# Locked to 16 Qubits as requested
-num_qubits = 16
-st.sidebar.info("Quantum Register Resolution (Qubits): 16 (Locked)")
+# NEW: User-controlled qubit count
+num_qubits = st.sidebar.slider(
+    "Quantum Register Resolution (Qubits):",
+    min_value=2,
+    max_value=16,
+    value=16
+)
 
 shots = st.sidebar.selectbox("Quantum Measurement Shots:", [10000, 30000, 50000], index=1)
 
+# Optional safety warning
+if num_qubits > 14 and shots > 30000:
+    st.sidebar.warning("High qubit count + high shots may slow down simulation.")
+
 run_button = st.sidebar.button("⚡ Run Quantum Analysis", type="primary", use_container_width=True)
+
 
 # --- QUANTUM SIMULATION ENGINE ---
 @st.cache_data(ttl=3600)
