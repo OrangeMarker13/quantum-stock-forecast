@@ -3,5 +3,4 @@ numpy
 pandas
 yfinance
 matplotlib
-qiskit
-qiskit-aer
+qiskit>=1.0.0
