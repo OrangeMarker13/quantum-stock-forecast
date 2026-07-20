@@ -6,3 +6,4 @@ matplotlib
 qiskit
 qiskit-aer
 qiskit-optimization
+qiskit-aer[mps]
