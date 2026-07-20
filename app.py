@@ -56,15 +56,13 @@ selected_ticker = st.sidebar.selectbox(
     accept_new_options=True
 ).upper().strip()
 
-forecast_days = st.sidebar.slider("Forecast Time Horizon (Days):", min_value=7, max_value=90, value=30)
+# Locked to 30 Days as requested
+forecast_days = 30
+st.sidebar.info("Forecast Time Horizon (Days): 30 (Locked)")
 
-# Upgraded to support high-qubit scaling via Matrix Product State (MPS)
-num_qubits = st.sidebar.select_slider(
-    "Quantum Register Resolution (Qubits):", 
-    options=[4, 8, 16, 32, 64, 100], 
-    value=16,
-    help="Scales resolution up to 100 qubits using Matrix Product State (MPS) Tensor Networks."
-)
+# Locked to 16 Qubits as requested
+num_qubits = 16
+st.sidebar.info("Quantum Register Resolution (Qubits): 16 (Locked)")
 
 shots = st.sidebar.selectbox("Quantum Measurement Shots:", [10000, 30000, 50000], index=1)
 
