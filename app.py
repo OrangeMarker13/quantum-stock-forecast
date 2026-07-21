@@ -2334,5 +2334,4 @@ Forecast outputs are statistical estimates and are not financial advice.
 """
 
 )
-
-    st.stop()
+st.stop()
