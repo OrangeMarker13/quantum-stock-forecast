@@ -4735,7 +4735,7 @@ if run_button:
     # FINAL FORECAST OBJECT
     # ========================================================
 
-     return {
+    return {
         "starting_price": S0,
 
         "price_grid": price_grid,
@@ -4780,7 +4780,7 @@ if run_button:
 
             "sentiment_weight": sentiment_weight
 
-         }
+        }
     }
 # ============================================================
 # FORECAST EXECUTION
