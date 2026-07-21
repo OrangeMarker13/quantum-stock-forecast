@@ -156,6 +156,10 @@ run_button = st.sidebar.button(
 # STOCK DATA LOADING
 # ============================================================
 
+# ============================================================
+# STOCK DATA LOADING
+# ============================================================
+
 @st.cache_data(
     ttl=3600,
     max_entries=50
@@ -164,12 +168,15 @@ def get_stock_data(ticker):
 
     try:
 
-        data = yf.download(
-            ticker,
+        stock = yf.Ticker(
+            ticker
+        )
+
+
+        data = stock.history(
             period="2y",
             interval="1d",
-            auto_adjust=False,
-            progress=False
+            auto_adjust=False
         )
 
 
@@ -189,41 +196,19 @@ def get_stock_data(ticker):
 
 
 
-    if isinstance(data.columns, pd.MultiIndex):
+    if "Close" not in data.columns:
 
-        if ("Close", ticker) in data.columns:
-
-            close_prices = data[
-                ("Close", ticker)
-            ]
-
-        elif "Close" in data.columns.get_level_values(0):
-
-            close_prices = (
-                data["Close"]
-                .iloc[:, 0]
-            )
-
-        else:
-
-            return pd.Series(dtype=float)
-
-
-    else:
-
-        if "Close" not in data.columns:
-
-            return pd.Series(dtype=float)
-
-        close_prices = data["Close"]
+        return pd.Series(dtype=float)
 
 
 
     close_prices = (
-        close_prices
+        data["Close"]
         .dropna()
         .astype(float)
     )
+
+
     return close_prices
 # ============================================================
 # QUANTUM ENGINE
