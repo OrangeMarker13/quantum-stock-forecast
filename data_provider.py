@@ -1,9 +1,9 @@
 # ============================================================
-# DATA_PROVIDER.PY PART 1/6
+# DATA_PROVIDER.PY
 # Quantum Equity Research Terminal
-# Upgraded Data Infrastructure
+# Production Data Infrastructure
+# PART 1/6
 # ============================================================
-
 
 import os
 import time
@@ -17,186 +17,110 @@ import streamlit as st
 # CONFIGURATION
 # ============================================================
 
-
 DATA_FOLDER = "data"
 
-
-if not os.path.exists(DATA_FOLDER):
-
-    os.makedirs(DATA_FOLDER)
-
-
-
-YAHOO_HEADERS = {
-
-    "User-Agent":
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
-
-}
-
-
-
 REQUEST_TIMEOUT = 15
-
-
 MAX_RETRIES = 3
 
 
+if not os.path.exists(DATA_FOLDER):
+    os.makedirs(DATA_FOLDER)
 
+
+YAHOO_HEADERS = {
+    "User-Agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+}
 
 
 # ============================================================
-# SAFE YAHOO REQUEST ENGINE
+# SAFE REQUEST ENGINE
 # ============================================================
-
 
 def yahoo_request(url):
-
 
     for attempt in range(MAX_RETRIES):
 
         try:
 
-
             response = requests.get(
-
                 url,
-
                 headers=YAHOO_HEADERS,
-
                 timeout=REQUEST_TIMEOUT
-
             )
-
 
 
             if response.status_code == 200:
 
-
                 return response.json()
 
 
-
-            else:
-
-
-                print(
-
-                    f"Yahoo request failed attempt {attempt+1}:",
-
-                    response.status_code
-
-                )
-
+            print(
+                "Yahoo request failed:",
+                response.status_code
+            )
 
 
         except Exception as error:
 
-
             print(
-
-                f"Yahoo request error attempt {attempt+1}:",
-
+                "Yahoo request error:",
                 error
-
             )
 
 
-
         time.sleep(1)
-
 
 
     return None
 
 
 
-
-
 # ============================================================
-# DATA STORAGE SYSTEM
+# DATA STORAGE
 # ============================================================
 
-
-def save_stock_data(
-
-    ticker,
-
-    dataframe
-
-):
-
+def save_stock_data(ticker, dataframe):
 
     try:
 
-
         if dataframe is None:
-
             return
-
 
 
         if dataframe.empty:
-
             return
 
 
-
         filepath = os.path.join(
-
             DATA_FOLDER,
-
             f"{ticker.upper()}.csv"
-
         )
-
 
 
         dataframe.to_csv(
-
             filepath,
-
             index=False
-
         )
-
 
 
     except Exception as error:
 
-
         print(
-
-            "Save stock data error:",
-
+            "Save error:",
             error
-
         )
 
 
 
-
-
-
-
-def load_saved_data(
-
-    ticker
-
-):
-
+def load_saved_data(ticker):
 
     try:
 
-
         filepath = os.path.join(
-
             DATA_FOLDER,
-
             f"{ticker.upper()}.csv"
-
         )
-
 
 
         if not os.path.exists(filepath):
@@ -206,24 +130,16 @@ def load_saved_data(
 
 
         dataframe = pd.read_csv(
-
             filepath
-
         )
-
 
 
         if "Date" in dataframe.columns:
 
-
             dataframe["Date"] = pd.to_datetime(
-
                 dataframe["Date"],
-
                 errors="coerce"
-
             )
-
 
 
         return dataframe
@@ -232,147 +148,79 @@ def load_saved_data(
 
     except Exception as error:
 
-
         print(
-
-            "Load stock data error:",
-
+            "Load error:",
             error
-
         )
-
 
         return pd.DataFrame()
 
 
 
-
-
 # ============================================================
-# FORMATTING FUNCTIONS
+# FORMATTING HELPERS
 # ============================================================
-
 
 def format_price(value):
 
-
     try:
-
-
-        if value is None:
-
-            return "N/A"
-
-
 
         return f"${float(value):,.2f}"
 
-
-
     except Exception:
 
-
         return "N/A"
-
-
-
-
 
 
 
 def format_percent(value):
 
-
     try:
-
-
-        if value is None:
-
-            return "N/A"
-
-
 
         return f"{float(value):+.2f}%"
 
-
-
     except Exception:
 
-
         return "N/A"
-
-
-
-
 
 
 
 def format_volume(value):
 
-
     try:
-
-
-        if value is None:
-
-            return "N/A"
-
-
 
         value = float(value)
 
 
-
         if value >= 1_000_000_000:
 
-
-            return f"{value / 1_000_000_000:.2f}B"
-
+            return f"{value/1_000_000_000:.2f}B"
 
 
         if value >= 1_000_000:
 
-
-            return f"{value / 1_000_000:.2f}M"
-
+            return f"{value/1_000_000:.2f}M"
 
 
         if value >= 1_000:
 
-
-            return f"{value / 1_000:.2f}K"
-
+            return f"{value/1_000:.2f}K"
 
 
         return str(int(value))
 
 
-
     except Exception:
-
 
         return "N/A"
 
 
 
-
-
-
-
-def safe_float(
-
-    value,
-
-    default=0.0
-
-):
-
+def safe_float(value, default=0.0):
 
     try:
 
-
         value = float(value)
-
 
 
         if np.isnan(value):
@@ -380,41 +228,27 @@ def safe_float(
             return default
 
 
-
         return value
 
 
-
     except Exception:
-
 
         return default
 
 
 
-
-
 # ============================================================
-# BASIC DATA CLEANING
+# CLEAN MARKET DATA
 # ============================================================
 
-
-def clean_market_data(
-
-    dataframe
-
-):
-
+def clean_market_data(dataframe):
 
     if dataframe is None:
-
 
         return pd.DataFrame()
 
 
-
     if dataframe.empty:
-
 
         return pd.DataFrame()
 
@@ -424,119 +258,75 @@ def clean_market_data(
 
 
 
-    # Remove duplicate dates
-
     if "Date" in data.columns:
 
-
         data = data.drop_duplicates(
-
             subset=["Date"]
-
         )
 
 
         data = data.sort_values(
-
             "Date"
-
         )
 
 
 
-    # Replace invalid values
-
     data = data.replace(
-
         [
-
             np.inf,
-
             -np.inf
-
         ],
-
         np.nan
-
     )
 
 
-
-    # Numeric conversion
-
     numeric_columns = [
-
         "Open",
-
         "High",
-
         "Low",
-
         "Close",
-
         "Volume"
-
     ]
-
 
 
     for column in numeric_columns:
 
-
         if column in data.columns:
 
-
             data[column] = pd.to_numeric(
-
                 data[column],
-
                 errors="coerce"
-
             )
 
 
 
     if "Close" in data.columns:
 
-
         data = data.dropna(
-
-            subset=["Close"]
-
+            subset=[
+                "Close"
+            ]
         )
 
 
 
     data = data.ffill()
-
-
-
     data = data.bfill()
-
 
 
     return data
 
 
 
-
-
 # ============================================================
-# VALIDATION SYSTEM
+# VALIDATION
 # ============================================================
 
-
-def validate_market_data(
-
-    dataframe
-
-):
-
+def validate_market_data(dataframe):
 
     if dataframe is None:
 
         return False
-
 
 
     if dataframe.empty:
@@ -544,23 +334,14 @@ def validate_market_data(
         return False
 
 
-
     if "Close" not in dataframe.columns:
 
         return False
 
 
-
     if len(dataframe) < 20:
 
         return False
-
-
-
-    if dataframe["Close"].isna().all():
-
-        return False
-
 
 
     return True
@@ -570,354 +351,158 @@ def validate_market_data(
 # ============================================================
 
 
-# ============================================================
-# MOVING AVERAGE FUNCTIONS
-# ============================================================
-
-
-def calculate_ema(
-
-    series,
-
-    period
-
-):
-
-
+def calculate_ema(series, period):
     return (
-
         series
-
         .ewm(
-
             span=period,
-
             adjust=False
-
         )
-
         .mean()
-
     )
 
 
-
-
-
-# ============================================================
-# RSI CALCULATION
-# ============================================================
-
-
-def calculate_rsi(
-
-    close,
-
-    period=14
-
-):
-
+def calculate_rsi(close, period=14):
 
     delta = close.diff()
 
+    gain = delta.clip(lower=0)
 
-
-    gain = delta.clip(
-
-        lower=0
-
-    )
-
-
-
-    loss = -delta.clip(
-
-        upper=0
-
-    )
-
-
+    loss = -delta.clip(upper=0)
 
     avg_gain = (
-
         gain
-
         .rolling(
-
             period,
-
             min_periods=1
-
         )
-
         .mean()
-
     )
-
-
 
     avg_loss = (
-
         loss
-
         .rolling(
-
             period,
-
             min_periods=1
-
         )
-
         .mean()
-
     )
-
-
 
     rs = (
-
         avg_gain /
-
         avg_loss.replace(
-
             0,
-
             np.nan
-
         )
-
     )
-
-
 
     rsi = (
-
         100 -
-
         (
-
             100 /
-
             (1 + rs)
-
         )
-
     )
-
-
 
     return rsi.fillna(50)
 
 
 
-
-
-
-
-# ============================================================
-# MACD CALCULATION
-# ============================================================
-
-
-def calculate_macd(
-
-    close
-
-):
-
+def calculate_macd(close):
 
     ema12 = calculate_ema(
-
         close,
-
         12
-
     )
-
-
 
     ema26 = calculate_ema(
-
         close,
-
         26
-
     )
 
-
-
-    macd = (
-
-        ema12 -
-
-        ema26
-
-    )
-
-
+    macd = ema12 - ema26
 
     signal = (
-
         macd
-
         .ewm(
-
             span=9,
-
             adjust=False
-
         )
-
         .mean()
-
     )
 
-
-
-    histogram = (
-
-        macd -
-
-        signal
-
-    )
-
-
+    histogram = macd - signal
 
     return (
-
         macd,
-
         signal,
-
         histogram
-
     )
 
-
-
-
-
-
-
-# ============================================================
-# BOLLINGER BAND CALCULATION
-# ============================================================
 
 
 def calculate_bollinger_bands(
-
     close,
-
     period=20
-
 ):
 
-
     middle = (
-
         close
-
         .rolling(
-
             period,
-
             min_periods=1
-
         )
-
         .mean()
-
     )
-
-
 
     std = (
-
         close
-
         .rolling(
-
             period,
-
             min_periods=1
-
         )
-
         .std()
-
+        .fillna(0)
     )
 
+    upper = middle + (std * 2)
 
+    lower = middle - (std * 2)
 
-    upper = (
-
-        middle +
-
-        (
-
-            std * 2
-
+    width = (
+        (upper - lower) /
+        middle.replace(
+            0,
+            np.nan
         )
-
     )
-
-
-
-    lower = (
-
-        middle -
-
-        (
-
-            std * 2
-
-        )
-
-    )
-
-
-
-    bandwidth = (
-
-        upper -
-
-        lower
-
-    ) / middle
-
-
 
     return (
-
-        upper,
-
-        middle,
-
-        lower,
-
-        bandwidth
-
+        upper.fillna(0),
+        middle.fillna(0),
+        lower.fillna(0),
+        width.fillna(0)
     )
 
-
-
-
-
-
-
-# ============================================================
-# ATR VOLATILITY CALCULATION
-# ============================================================
 
 
 def calculate_atr(
-
     dataframe,
-
     period=14
-
 ):
+
+    if not all(
+        column in dataframe.columns
+        for column in [
+            "High",
+            "Low",
+            "Close"
+        ]
+    ):
+        return pd.Series(
+            0,
+            index=dataframe.index
+        )
 
 
     high = dataframe["High"]
@@ -927,521 +512,228 @@ def calculate_atr(
     close = dataframe["Close"]
 
 
-
     previous_close = close.shift(1)
 
 
-
     true_range = pd.concat(
-
         [
-
             high - low,
-
             abs(high - previous_close),
-
             abs(low - previous_close)
-
         ],
-
         axis=1
-
-    ).max(
-
-        axis=1
-
-    )
+    ).max(axis=1)
 
 
-
-    atr = (
-
+    return (
         true_range
-
         .rolling(
-
             period,
-
             min_periods=1
-
         )
-
         .mean()
-
+        .fillna(0)
     )
 
 
 
-    return atr
-
-
-
-
-
-
-
-# ============================================================
-# MAIN INDICATOR PIPELINE
-# ============================================================
-
-
-def add_indicators(
-
-    dataframe
-
-):
-
+def add_indicators(dataframe):
 
     if dataframe is None:
-
-
         return pd.DataFrame()
 
 
-
     if dataframe.empty:
-
-
         return dataframe
-
 
 
     data = dataframe.copy()
 
 
-
     if "Close" not in data.columns:
-
-
         return data
 
 
 
-
-
-    # ========================================================
-    # RETURNS
-    # ========================================================
-
-
     data["Return"] = (
-
         data["Close"]
-
         .pct_change()
-
         .fillna(0)
-
     )
-
 
 
     data["Log_Return"] = np.log(
-
         data["Close"] /
-
         data["Close"].shift(1)
-
     )
-
 
 
     data["Log_Return"] = (
-
         data["Log_Return"]
-
         .replace(
-
             [
-
                 np.inf,
-
                 -np.inf
-
             ],
-
             np.nan
-
         )
-
         .fillna(0)
-
     )
 
-
-
-
-
-
-
-    # ========================================================
-    # MOVING AVERAGES
-    # ========================================================
 
 
     data["SMA20"] = (
-
         data["Close"]
-
         .rolling(
-
             20,
-
             min_periods=1
-
         )
-
         .mean()
-
     )
-
 
 
     data["SMA50"] = (
-
         data["Close"]
-
         .rolling(
-
             50,
-
             min_periods=1
-
         )
-
         .mean()
-
     )
-
 
 
     data["SMA200"] = (
-
         data["Close"]
-
         .rolling(
-
             200,
-
             min_periods=20
-
         )
-
         .mean()
-
     )
-
 
 
     data["EMA12"] = calculate_ema(
-
         data["Close"],
-
         12
-
     )
-
 
 
     data["EMA26"] = calculate_ema(
-
         data["Close"],
-
         26
-
     )
 
-
-
-
-
-
-
-    # ========================================================
-    # RSI
-    # ========================================================
 
 
     data["RSI"] = calculate_rsi(
-
         data["Close"]
-
     )
 
 
 
-
-
-
-
-    # ========================================================
-    # MACD
-    # ========================================================
-
-
     (
-
         data["MACD"],
-
         data["MACD_Signal"],
-
         data["MACD_Hist"]
-
     ) = calculate_macd(
-
         data["Close"]
-
     )
 
-
-
-
-
-
-
-    # ========================================================
-    # BOLLINGER BANDS
-    # ========================================================
 
 
     (
-
         data["BB_Upper"],
-
         data["BB_Middle"],
-
         data["BB_Lower"],
-
         data["BB_Width"]
-
     ) = calculate_bollinger_bands(
-
         data["Close"]
-
     )
 
 
 
-
-
-
-
-    # ========================================================
-    # VOLATILITY
-    # ========================================================
-
-
     data["Volatility"] = (
-
         data["Log_Return"]
-
         .rolling(
-
             20,
-
             min_periods=5
-
         )
-
         .std()
-
-    )
-
-
-
-    data["Volatility"] = (
-
-        data["Volatility"]
-
-        .fillna(
-
-            data["Log_Return"].std()
-
-        )
-
         .fillna(0)
-
     )
 
 
 
+    data["ATR"] = calculate_atr(
+        data
+    )
 
-
-
-
-    # ========================================================
-    # ATR
-    # ========================================================
-
-
-    if (
-
-        "High" in data.columns
-
-        and
-
-        "Low" in data.columns
-
-    ):
-
-
-        data["ATR"] = calculate_atr(
-
-            data
-
-        )
-
-
-    else:
-
-
-        data["ATR"] = 0
-
-
-
-
-
-
-
-    # ========================================================
-    # MOMENTUM
-    # ========================================================
 
 
     data["Momentum_20"] = (
-
-        data["Close"]
-
-        /
-
+        data["Close"] /
         data["Close"].shift(20)
-
-        -
-
-        1
-
-    )
+        - 1
+    ).replace(
+        [
+            np.inf,
+            -np.inf
+        ],
+        np.nan
+    ).fillna(0)
 
 
 
     data["Momentum_60"] = (
-
-        data["Close"]
-
-        /
-
+        data["Close"] /
         data["Close"].shift(60)
+        - 1
+    ).replace(
+        [
+            np.inf,
+            -np.inf
+        ],
+        np.nan
+    ).fillna(0)
 
-        -
-
-        1
-
-    )
-
-
-
-    data["Momentum_20"] = (
-
-        data["Momentum_20"]
-
-        .replace(
-
-            [
-
-                np.inf,
-
-                -np.inf
-
-            ],
-
-            np.nan
-
-        )
-
-        .fillna(0)
-
-    )
-
-
-
-    data["Momentum_60"] = (
-
-        data["Momentum_60"]
-
-        .replace(
-
-            [
-
-                np.inf,
-
-                -np.inf
-
-            ],
-
-            np.nan
-
-        )
-
-        .fillna(0)
-
-    )
-
-
-
-
-
-
-
-    # ========================================================
-    # VOLUME FEATURES
-    # ========================================================
 
 
     if "Volume" in data.columns:
 
-
         data["Volume_Change"] = (
-
             data["Volume"]
-
             .pct_change()
-
+            .replace(
+                [
+                    np.inf,
+                    -np.inf
+                ],
+                np.nan
+            )
+            .fillna(0)
         )
-
 
 
         data["Volume_Average_20"] = (
-
             data["Volume"]
-
             .rolling(
-
                 20,
-
                 min_periods=1
-
             )
-
             .mean()
-
         )
-
 
 
         data["Volume_Ratio"] = (
-
-            data["Volume"]
-
-            /
-
-            data["Volume_Average_20"]
-
-        )
-
+            data["Volume"] /
+            data["Volume_Average_20"].replace(
+                0,
+                np.nan
+            )
+        ).fillna(0)
 
 
     else:
-
 
         data["Volume_Change"] = 0
 
@@ -1451,28 +743,16 @@ def add_indicators(
 
 
 
-
-
-    # Clean remaining values
-
     data = data.replace(
-
         [
-
             np.inf,
-
             -np.inf
-
         ],
-
         np.nan
-
     )
 
 
-
     data = data.fillna(0)
-
 
 
     return data
@@ -1482,211 +762,106 @@ def add_indicators(
 # ============================================================
 
 
-
 # ============================================================
 # MARKET REGIME DETECTION
 # ============================================================
 
 
-def calculate_market_regime(
-
-    dataframe
-
-):
-
+def calculate_market_regime(dataframe):
 
     data = dataframe.copy()
 
-
-
     if data.empty:
-
-
         return data
 
 
+    trend_score = np.zeros(len(data))
 
 
+    if "SMA20" in data.columns:
 
-    # ========================================================
-    # TREND COMPONENT
-    # ========================================================
-
-
-    trend_score = np.zeros(
-
-        len(data)
-
-    )
+        trend_score += np.where(
+            data["Close"] > data["SMA20"],
+            1,
+            -1
+        )
 
 
+    if "SMA50" in data.columns:
 
-    trend_score += np.where(
-
-        data["Close"] > data["SMA20"],
-
-        1,
-
-        -1
-
-    )
-
-
-
-    trend_score += np.where(
-
-        data["Close"] > data["SMA50"],
-
-        1,
-
-        -1
-
-    )
-
+        trend_score += np.where(
+            data["Close"] > data["SMA50"],
+            1,
+            -1
+        )
 
 
     if "SMA200" in data.columns:
 
-
         trend_score += np.where(
-
             data["Close"] > data["SMA200"],
-
             1,
-
             -1
-
         )
 
 
+    momentum_score = np.zeros(len(data))
 
 
+    if "Momentum_20" in data.columns:
 
-    # ========================================================
-    # MOMENTUM COMPONENT
-    # ========================================================
-
-
-    momentum_score = np.zeros(
-
-        len(data)
-
-    )
+        momentum_score += np.where(
+            data["Momentum_20"] > 0,
+            1,
+            -1
+        )
 
 
+    if "Momentum_60" in data.columns:
 
-    momentum_score += np.where(
-
-        data["Momentum_20"] > 0,
-
-        1,
-
-        -1
-
-    )
+        momentum_score += np.where(
+            data["Momentum_60"] > 0,
+            1,
+            -1
+        )
 
 
-
-    momentum_score += np.where(
-
-        data["Momentum_60"] > 0,
-
-        1,
-
-        -1
-
-    )
+    macd_score = np.zeros(len(data))
 
 
+    if (
+        "MACD" in data.columns
+        and
+        "MACD_Signal" in data.columns
+    ):
+
+        macd_score = np.where(
+            data["MACD"] > data["MACD_Signal"],
+            1,
+            -1
+        )
 
 
+    data["Trend_Score"] = trend_score / 3
 
-    # ========================================================
-    # MACD COMPONENT
-    # ========================================================
-
-
-    macd_score = np.where(
-
-        data["MACD"] >
-
-        data["MACD_Signal"],
-
-        1,
-
-        -1
-
-    )
-
-
-
-
-
-
-
-    # ========================================================
-    # COMBINED MARKET SCORE
-    # ========================================================
-
-
-    data["Trend_Score"] = (
-
-        trend_score /
-
-        3
-
-    )
-
-
-
-    data["Momentum_Score"] = (
-
-        momentum_score /
-
-        2
-
-    )
-
-
+    data["Momentum_Score"] = momentum_score / 2
 
     data["MACD_Score"] = macd_score
 
 
-
-
-
     data["Market_Strength"] = (
 
-        (
-
-            data["Trend_Score"] *
-
-            0.45
-
-        )
+        (data["Trend_Score"] * 0.45)
 
         +
 
-        (
-
-            data["Momentum_Score"] *
-
-            0.35
-
-        )
+        (data["Momentum_Score"] * 0.35)
 
         +
 
-        (
-
-            data["MACD_Score"] *
-
-            0.20
-
-        )
+        (data["MACD_Score"] * 0.20)
 
     )
-
 
 
     data["Market_Strength"] = (
@@ -1695,7 +870,9 @@ def calculate_market_regime(
 
             data["Market_Strength"]
 
-            + 1
+            +
+
+            1
 
         )
 
@@ -1707,46 +884,22 @@ def calculate_market_regime(
 
 
 
-
-
-
-
-    # ========================================================
-    # MARKET REGIME LABEL
-    # ========================================================
-
-
     data["Market_Regime"] = "Neutral"
 
 
-
     data.loc[
-
         data["Market_Strength"] >= 65,
-
         "Market_Regime"
-
     ] = "Bullish"
 
 
-
     data.loc[
-
         data["Market_Strength"] <= 35,
-
         "Market_Regime"
-
     ] = "Bearish"
 
 
-
-
-
-
-
     return data
-
-
 
 
 
@@ -1757,42 +910,30 @@ def calculate_market_regime(
 # ============================================================
 
 
-def add_volatility_regime(
-
-    dataframe
-
-):
+def add_volatility_regime(dataframe):
 
 
     data = dataframe.copy()
 
 
-
     if data.empty:
-
 
         return data
 
 
 
-
-
-    volatility_average = (
+    average_volatility = (
 
         data["Volatility"]
 
         .rolling(
-
             60,
-
             min_periods=10
-
         )
 
         .mean()
 
     )
-
 
 
     data["Volatility_Regime"] = (
@@ -1801,10 +942,9 @@ def add_volatility_regime(
 
         /
 
-        volatility_average
+        average_volatility
 
     )
-
 
 
     data["Volatility_Regime"] = (
@@ -1812,27 +952,16 @@ def add_volatility_regime(
         data["Volatility_Regime"]
 
         .replace(
-
             [
-
                 np.inf,
-
                 -np.inf
-
             ],
-
             np.nan
-
         )
 
         .fillna(1)
 
     )
-
-
-
-
-
 
 
     data["High_Volatility"] = np.where(
@@ -1846,10 +975,7 @@ def add_volatility_regime(
     )
 
 
-
     return data
-
-
 
 
 
@@ -1860,37 +986,23 @@ def add_volatility_regime(
 # ============================================================
 
 
-def add_risk_features(
-
-    dataframe
-
-):
+def add_risk_features(dataframe):
 
 
     data = dataframe.copy()
 
 
-
     if data.empty:
-
 
         return data
 
 
 
-
-
-    # Rolling downside deviation
-
-
     negative_returns = data["Return"].copy()
 
 
-
     negative_returns[
-
         negative_returns > 0
-
     ] = 0
 
 
@@ -1900,22 +1012,13 @@ def add_risk_features(
         negative_returns
 
         .rolling(
-
             30,
-
             min_periods=5
-
         )
 
         .std()
 
     )
-
-
-
-
-
-    # Maximum drawdown
 
 
     rolling_high = (
@@ -1927,8 +1030,7 @@ def add_risk_features(
     )
 
 
-
-    drawdown = (
+    data["Drawdown"] = (
 
         data["Close"]
 
@@ -1943,23 +1045,13 @@ def add_risk_features(
     )
 
 
-
-    data["Drawdown"] = drawdown
-
-
-
-
-
     data["Max_Drawdown"] = (
 
-        drawdown
+        data["Drawdown"]
 
         .rolling(
-
             252,
-
             min_periods=20
-
         )
 
         .min()
@@ -1967,12 +1059,22 @@ def add_risk_features(
     )
 
 
+    data = data.replace(
 
+        [
+            np.inf,
+            -np.inf
+        ],
+
+        np.nan
+
+    )
+
+
+    data = data.fillna(0)
 
 
     return data
-
-
 
 
 
@@ -1983,22 +1085,16 @@ def add_risk_features(
 # ============================================================
 
 
-def add_advanced_features(
-
-    dataframe
-
-):
+def add_advanced_features(dataframe):
 
 
     if dataframe is None:
-
 
         return pd.DataFrame()
 
 
 
     if dataframe.empty:
-
 
         return dataframe
 
@@ -2011,75 +1107,58 @@ def add_advanced_features(
     try:
 
 
-
-
         # Trend distance
 
+        if "SMA20" in data.columns:
 
-        data["SMA20_Distance"] = (
+            data["SMA20_Distance"] = (
 
-            data["Close"]
+                (
 
-            -
+                    data["Close"]
 
-            data["SMA20"]
+                    -
 
-        )
+                    data["SMA20"]
 
-        /
+                )
 
-        data["SMA20"]
+                /
 
+                data["SMA20"]
 
-
-        data["SMA50_Distance"] = (
-
-            data["Close"]
-
-            -
-
-            data["SMA50"]
-
-        )
-
-        /
-
-        data["SMA50"]
+            )
 
 
+        if "SMA50" in data.columns:
 
+            data["SMA50_Distance"] = (
 
+                (
 
+                    data["Close"]
 
+                    -
 
-        # Run advanced systems
+                    data["SMA50"]
 
+                )
 
-        data = calculate_market_regime(
+                /
 
-            data
+                data["SMA50"]
 
-        )
+            )
 
 
 
-        data = add_volatility_regime(
-
-            data
-
-        )
+        data = calculate_market_regime(data)
 
 
-
-        data = add_risk_features(
-
-            data
-
-        )
+        data = add_volatility_regime(data)
 
 
-
-
+        data = add_risk_features(data)
 
 
 
@@ -2147,45 +1226,27 @@ def add_advanced_features(
         )
 
 
-
         data["Quantum_Feature_Score"] = (
 
             data["Quantum_Feature_Score"]
 
             .clip(
-
                 0,
-
                 100
-
             )
 
         )
 
 
-
-
-
-
-
-        # Future AI integration fields
-
+        # Placeholder inputs for future models
 
         data["News_Sentiment"] = 0
-
-
 
         data["Analyst_Score"] = 50
 
 
 
-
-
-
-
         return data
-
-
 
 
 
@@ -2207,67 +1268,15 @@ def add_advanced_features(
 
 
 
-
-
 # ============================================================
-# BENCHMARK DATA PREPARATION
+# QUANTUM MODEL FEATURE EXTRACTION
 # ============================================================
 
 
-@st.cache_data(
-
-    ttl=900,
-
-    max_entries=20
-
-)
-
-def get_market_benchmark(
-
-    ticker="SPY"
-
-):
-
-
-    try:
-
-
-        data = get_stock_data(
-
-            ticker
-
-        )
-
-
-        return data
-
-
-
-    except Exception:
-
-
-        return pd.DataFrame()
-
-
-
-
-
-
-
-# ============================================================
-# FEATURE EXTRACTION FOR QUANTUM ENGINE
-# ============================================================
-
-
-def get_quantum_features(
-
-    dataframe
-
-):
+def get_quantum_features(dataframe):
 
 
     if dataframe is None:
-
 
         return {}
 
@@ -2275,10 +1284,7 @@ def get_quantum_features(
 
     if dataframe.empty:
 
-
         return {}
-
-
 
 
 
@@ -2286,127 +1292,162 @@ def get_quantum_features(
 
 
 
-
-
-    features = {
-
+    return {
 
 
         "price":
 
-        float(
-
-            latest["Close"]
-
+        safe_float(
+            latest.get(
+                "Close",
+                0
+            )
         ),
 
 
 
         "volatility":
 
-        float(
-
+        safe_float(
             latest.get(
-
                 "Volatility",
-
                 0
-
             )
-
         ),
 
 
 
         "momentum":
 
-        float(
-
+        safe_float(
             latest.get(
-
                 "Momentum_20",
-
                 0
-
             )
-
         ),
 
 
 
         "market_strength":
 
-        float(
-
+        safe_float(
             latest.get(
-
                 "Market_Strength",
-
                 50
-
             )
-
         ),
 
 
 
         "rsi":
 
-        float(
-
+        safe_float(
             latest.get(
-
                 "RSI",
-
                 50
-
             )
-
         ),
 
 
 
         "macd":
 
-        float(
-
+        safe_float(
             latest.get(
-
                 "MACD",
-
                 0
-
             )
-
         ),
 
 
 
         "sentiment":
 
-        float(
-
+        safe_float(
             latest.get(
-
                 "News_Sentiment",
-
                 0
-
             )
-
         )
 
 
-
     }
-
-
-
-    return features
     # ============================================================
 # DATA_PROVIDER.PY PART 4/6
 # HISTORICAL DATA ENGINE + LIVE DATA SYSTEM
 # ============================================================
+
+
+# ============================================================
+# YAHOO FINANCE DATA FETCHER
+# ============================================================
+
+
+def fetch_yahoo_chart(ticker, period="5y"):
+
+
+    ticker = ticker.upper().strip()
+
+
+    urls = [
+
+        (
+            "https://query1.finance.yahoo.com/"
+            f"v8/finance/chart/{ticker}"
+            f"?range={period}&interval=1d"
+        ),
+
+        (
+            "https://query2.finance.yahoo.com/"
+            f"v8/finance/chart/{ticker}"
+            f"?range={period}&interval=1d"
+        )
+
+    ]
+
+
+    for url in urls:
+
+
+        data = yahoo_request(url)
+
+
+        if data is not None:
+
+
+            try:
+
+                result = (
+
+                    data
+
+                    .get(
+                        "chart",
+                        {}
+                    )
+
+                    .get(
+                        "result",
+                        []
+                    )
+
+                )
+
+
+                if result:
+
+                    return result[0]
+
+
+            except Exception:
+
+                pass
+
+
+
+    return None
+
+
 
 
 
@@ -2423,128 +1464,77 @@ def get_quantum_features(
 
 )
 
-def get_stock_data(
-
-    ticker
-
-):
+def get_stock_data(ticker):
 
 
-    ticker = (
+    ticker = ticker.upper().strip()
+
+
+
+    chart = fetch_yahoo_chart(
 
         ticker
 
-        .upper()
-
-        .strip()
-
     )
 
 
 
-    url = (
+    if chart is None:
 
-        "https://query1.finance.yahoo.com/"
 
-        f"v8/finance/chart/{ticker}"
+        print(
 
-        "?range=5y&interval=1d"
+            "Using local cache for",
 
-    )
+            ticker
+
+        )
+
+
+        saved = load_saved_data(
+
+            ticker
+
+        )
+
+
+        if saved.empty:
+
+            return pd.DataFrame()
+
+
+
+        saved = clean_market_data(
+
+            saved
+
+        )
+
+
+        saved = add_indicators(
+
+            saved
+
+        )
+
+
+        saved = add_advanced_features(
+
+            saved
+
+        )
+
+
+        return saved
+
+
 
 
 
     try:
 
 
-        json_data = yahoo_request(
-
-            url
-
-        )
-
-
-
-        if json_data is None:
-
-
-            saved = load_saved_data(
-
-                ticker
-
-            )
-
-
-            if saved.empty:
-
-
-                return pd.DataFrame()
-
-
-
-            saved = clean_market_data(
-
-                saved
-
-            )
-
-
-            saved = add_indicators(
-
-                saved
-
-            )
-
-
-            saved = add_advanced_features(
-
-                saved
-
-            )
-
-
-            return saved
-
-
-
-
-
-        result = (
-
-            json_data
-
-            .get(
-
-                "chart",
-
-                {}
-
-            )
-
-            .get(
-
-                "result",
-
-                []
-
-            )
-
-        )
-
-
-
-        if not result:
-
-
-            return pd.DataFrame()
-
-
-
-        result = result[0]
-
-
-
-        timestamps = result.get(
+        timestamps = chart.get(
 
             "timestamp",
 
@@ -2554,19 +1544,17 @@ def get_stock_data(
 
 
 
-        indicators = result.get(
-
-            "indicators",
-
-            {}
-
-        )
-
-
-
         quote = (
 
-            indicators
+            chart
+
+            .get(
+
+                "indicators",
+
+                {}
+
+            )
 
             .get(
 
@@ -2580,9 +1568,17 @@ def get_stock_data(
 
 
 
-        adjclose = (
+        adjusted = (
 
-            indicators
+            chart
+
+            .get(
+
+                "indicators",
+
+                {}
+
+            )
 
             .get(
 
@@ -2596,13 +1592,12 @@ def get_stock_data(
 
 
 
-
-
-
-
         dataframe = pd.DataFrame(
 
+
+
             {
+
 
                 "Date":
 
@@ -2680,7 +1675,7 @@ def get_stock_data(
 
                 "Adjusted_Close":
 
-                adjclose.get(
+                adjusted.get(
 
                     "adjclose",
 
@@ -2688,13 +1683,11 @@ def get_stock_data(
 
                 )
 
+
             }
 
+
         )
-
-
-
-
 
 
 
@@ -2706,12 +1699,22 @@ def get_stock_data(
 
 
 
+        if not validate_market_data(
+
+            dataframe
+
+        ):
+
+
+            return pd.DataFrame()
+
+
+
         dataframe = add_indicators(
 
             dataframe
 
         )
-
 
 
         dataframe = add_advanced_features(
@@ -2722,26 +1725,17 @@ def get_stock_data(
 
 
 
+        save_stock_data(
 
+            ticker,
 
+            dataframe
 
-
-        if not dataframe.empty:
-
-
-            save_stock_data(
-
-                ticker,
-
-                dataframe
-
-            )
+        )
 
 
 
         return dataframe
-
-
 
 
 
@@ -2750,61 +1744,21 @@ def get_stock_data(
 
         print(
 
-            "Historical data error:",
+            "Historical loader error:",
 
             error
 
         )
 
 
-
-        saved = load_saved_data(
-
-            ticker
-
-        )
-
-
-
-        if saved.empty:
-
-
-            return pd.DataFrame()
-
-
-
-        saved = clean_market_data(
-
-            saved
-
-        )
-
-
-        saved = add_indicators(
-
-            saved
-
-        )
-
-
-        saved = add_advanced_features(
-
-            saved
-
-        )
-
-
-
-        return saved
-
-
+        return pd.DataFrame()
 
 
 
 
 
 # ============================================================
-# LIVE PRICE ENGINE
+# LIVE PRICE SYSTEM
 # ============================================================
 
 
@@ -2816,97 +1770,41 @@ def get_stock_data(
 
 )
 
-def get_live_price(
-
-    ticker
-
-):
+def get_live_price(ticker):
 
 
-    ticker = (
+    ticker = ticker.upper().strip()
 
-        ticker
 
-        .upper()
 
-        .strip()
+    chart = fetch_yahoo_chart(
+
+        ticker,
+
+        period="1d"
 
     )
 
 
 
-    url = (
+    if chart is None:
 
-        "https://query1.finance.yahoo.com/"
 
-        f"v8/finance/chart/{ticker}"
+        return None
 
-    )
 
 
 
     try:
 
 
-        data = yahoo_request(
-
-            url
-
-        )
-
-
-
-        if not data:
-
-
-            return None
-
-
-
-
-
-        result = (
-
-            data
-
-            .get(
-
-                "chart",
-
-                {}
-
-            )
-
-            .get(
-
-                "result",
-
-                []
-
-            )
-
-        )
-
-
-
-        if not result:
-
-
-            return None
-
-
-
-
-
-        meta = result[0].get(
+        meta = chart.get(
 
             "meta",
 
             {}
 
         )
-
-
 
 
 
@@ -2929,9 +1827,49 @@ def get_live_price(
         if price is None:
 
 
+            regular = chart.get(
+
+                "indicators",
+
+                {}
+
+            )
+
+
+            closes = (
+
+                regular
+
+                .get(
+
+                    "quote",
+
+                    [{}]
+
+                )[0]
+
+                .get(
+
+                    "close",
+
+                    []
+
+                )
+
+            )
+
+
+            if closes:
+
+
+                price = closes[-1]
+
+
+
+        if price is None:
+
+
             return None
-
-
 
 
 
@@ -2940,8 +1878,6 @@ def get_live_price(
             price
 
         )
-
-
 
 
 
@@ -2955,12 +1891,13 @@ def get_live_price(
             )
 
 
-
             change = (
 
                 (
 
-                    price -
+                    price
+
+                    -
 
                     previous
 
@@ -2981,10 +1918,7 @@ def get_live_price(
 
 
 
-
-
         return {
-
 
 
             "price":
@@ -2992,17 +1926,14 @@ def get_live_price(
             price,
 
 
-
             "previous_close":
 
             previous,
 
 
-
             "change_percent":
 
             change,
-
 
 
             "currency":
@@ -3016,7 +1947,6 @@ def get_live_price(
             ),
 
 
-
             "exchange":
 
             meta.get(
@@ -3028,9 +1958,7 @@ def get_live_price(
             )
 
 
-
         }
-
 
 
 
@@ -3047,17 +1975,14 @@ def get_live_price(
         )
 
 
-
         return None
 
 
 
 
 
-
-
 # ============================================================
-# COMPANY INFORMATION SYSTEM
+# COMPANY INFORMATION
 # ============================================================
 
 
@@ -3069,164 +1994,14 @@ def get_live_price(
 
 )
 
-def get_company_info(
+def get_company_info(ticker):
 
-    ticker
 
-):
+    ticker = ticker.upper().strip()
 
 
-    ticker = (
 
-        ticker
-
-        .upper()
-
-        .strip()
-
-    )
-
-
-
-    url = (
-
-        "https://query1.finance.yahoo.com/"
-
-        f"v7/finance/quote?symbols={ticker}"
-
-    )
-
-
-
-    try:
-
-
-        data = yahoo_request(
-
-            url
-
-        )
-
-
-
-        results = (
-
-            data
-
-            .get(
-
-                "quoteResponse",
-
-                {}
-
-            )
-
-            .get(
-
-                "result",
-
-                []
-
-            )
-
-        )
-
-
-
-        if results:
-
-
-            info = results[0]
-
-
-
-            return {
-
-
-
-                "name":
-
-                info.get(
-
-                    "longName",
-
-                    info.get(
-
-                        "shortName",
-
-                        ticker
-
-                    )
-
-                ),
-
-
-
-                "symbol":
-
-                ticker,
-
-
-
-                "exchange":
-
-                info.get(
-
-                    "fullExchangeName",
-
-                    "Unknown"
-
-                ),
-
-
-
-                "currency":
-
-                info.get(
-
-                    "currency",
-
-                    "USD"
-
-                ),
-
-
-
-                "type":
-
-                info.get(
-
-                    "quoteType",
-
-                    "Unknown"
-
-                )
-
-
-
-            }
-
-
-
-    except Exception as error:
-
-
-        print(
-
-            "Company lookup error:",
-
-            error
-
-        )
-
-
-
-
-
-
-
-    fallback = {
-
+    known = {
 
 
         "AAPL":
@@ -3234,11 +2009,9 @@ def get_company_info(
         "Apple Inc.",
 
 
-
         "MSFT":
 
         "Microsoft Corporation",
-
 
 
         "NVDA":
@@ -3246,17 +2019,14 @@ def get_company_info(
         "NVIDIA Corporation",
 
 
-
         "GOOGL":
 
         "Alphabet Inc.",
 
 
-
         "AMZN":
 
-        "Amazon Inc.",
-
+        "Amazon.com Inc.",
 
 
         "META":
@@ -3264,24 +2034,21 @@ def get_company_info(
         "Meta Platforms Inc.",
 
 
-
         "TSLA":
 
         "Tesla Inc."
 
+
     }
-
-
 
 
 
     return {
 
 
-
         "name":
 
-        fallback.get(
+        known.get(
 
             ticker,
 
@@ -3290,11 +2057,9 @@ def get_company_info(
         ),
 
 
-
         "symbol":
 
         ticker,
-
 
 
         "exchange":
@@ -3302,23 +2067,16 @@ def get_company_info(
         "Unknown",
 
 
-
         "currency":
 
-        "USD",
+        "USD"
 
-
-
-        "type":
-
-        "Unknown"
 
     }
     # ============================================================
 # DATA_PROVIDER.PY PART 5/6
 # SEARCH ENGINE + VALIDATION + CACHE SYSTEM
 # ============================================================
-
 
 
 # ============================================================
@@ -3334,27 +2092,17 @@ def get_company_info(
 
 )
 
-def search_stocks(
-
-    query
-
-):
+def search_stocks(query):
 
 
-    if query is None:
+    if not query:
 
 
         return []
 
 
 
-    query = (
-
-        query
-
-        .strip()
-
-    )
+    query = query.strip()
 
 
 
@@ -3362,8 +2110,6 @@ def search_stocks(
 
 
         return []
-
-
 
 
 
@@ -3388,12 +2134,10 @@ def search_stocks(
 
 
 
-        if not data:
+        if data is None:
 
 
             return []
-
-
 
 
 
@@ -3411,10 +2155,7 @@ def search_stocks(
 
 
 
-
-
         for item in quotes:
-
 
 
             symbol = item.get(
@@ -3422,6 +2163,12 @@ def search_stocks(
                 "symbol"
 
             )
+
+
+            if not symbol:
+
+
+                continue
 
 
 
@@ -3441,6 +2188,10 @@ def search_stocks(
 
                 )
 
+                or
+
+                symbol
+
             )
 
 
@@ -3455,20 +2206,7 @@ def search_stocks(
 
 
 
-
-
-            if not symbol:
-
-
-                continue
-
-
-
-
-
             priority = 0
-
-
 
 
 
@@ -3479,14 +2217,10 @@ def search_stocks(
 
 
 
-
-
             if quote_type == "ETF":
 
 
                 priority += 5
-
-
 
 
 
@@ -3497,8 +2231,6 @@ def search_stocks(
 
 
 
-
-
             results.append(
 
                 {
@@ -3506,8 +2238,7 @@ def search_stocks(
 
                     "label":
 
-                    f"{name or symbol} ({symbol})",
-
+                    f"{name} ({symbol})",
 
 
                     "symbol":
@@ -3515,17 +2246,14 @@ def search_stocks(
                     symbol,
 
 
-
                     "name":
 
-                    name or symbol,
-
+                    name,
 
 
                     "priority":
 
                     priority
-
 
 
                 }
@@ -3534,13 +2262,7 @@ def search_stocks(
 
 
 
-
-
-
-
-        results = sorted(
-
-            results,
+        results.sort(
 
             key=lambda x:
 
@@ -3552,11 +2274,7 @@ def search_stocks(
 
 
 
-
-
         return results[:15]
-
-
 
 
 
@@ -3572,7 +2290,6 @@ def search_stocks(
         )
 
 
-
         return []
 
 
@@ -3586,19 +2303,13 @@ def search_stocks(
 # ============================================================
 
 
-def validate_market_data(
-
-    dataframe
-
-):
+def validate_market_data(dataframe):
 
 
     if dataframe is None:
 
 
         return False
-
-
 
 
 
@@ -3609,33 +2320,20 @@ def validate_market_data(
 
 
 
+    if "Close" not in dataframe.columns:
 
 
-    required = [
-
-        "Close"
-
-    ]
+        return False
 
 
 
-
-
-    for column in required:
-
-
-        if column not in dataframe.columns:
-
-
-            return False
+    data = dataframe.copy()
 
 
 
+    data["Close"] = pd.to_numeric(
 
-
-    dataframe["Close"] = pd.to_numeric(
-
-        dataframe["Close"],
+        data["Close"],
 
         errors="coerce"
 
@@ -3643,9 +2341,7 @@ def validate_market_data(
 
 
 
-
-
-    dataframe = dataframe.dropna(
+    data = data.dropna(
 
         subset=[
 
@@ -3657,14 +2353,17 @@ def validate_market_data(
 
 
 
-
-
-    if len(dataframe) < 20:
+    if len(data) < 20:
 
 
         return False
 
 
+
+    if data["Close"].nunique() <= 1:
+
+
+        return False
 
 
 
@@ -3681,11 +2380,7 @@ def validate_market_data(
 # ============================================================
 
 
-def get_market_status(
-
-    live_data
-
-):
+def get_market_status(live_data):
 
 
     if live_data is None:
@@ -3695,11 +2390,7 @@ def get_market_status(
 
 
 
-    return (
-
-        "Live Data Connected"
-
-    )
+    return "Live Data Connected"
 
 
 
@@ -3722,16 +2413,23 @@ def clear_data_cache():
 
 
 
+        return True
+
+
+
     except Exception as error:
 
 
         print(
 
-            "Cache clear failed:",
+            "Cache clear error:",
 
             error
 
         )
+
+
+        return False
 
 
 
@@ -3744,13 +2442,7 @@ def clear_data_cache():
 # ============================================================
 
 
-def safe_float(
-
-    value,
-
-    default=0.0
-
-):
+def safe_float(value, default=0.0):
 
 
     try:
@@ -3763,7 +2455,6 @@ def safe_float(
         )
 
 
-
         if np.isnan(value):
 
 
@@ -3772,8 +2463,6 @@ def safe_float(
 
 
         return value
-
-
 
 
 
@@ -3793,22 +2482,10 @@ def safe_float(
 # ============================================================
 
 
-def get_market_summary(
-
-    ticker
-
-):
+def get_market_summary(ticker):
 
 
-    ticker = (
-
-        ticker
-
-        .upper()
-
-        .strip()
-
-    )
+    ticker = ticker.upper().strip()
 
 
 
@@ -3828,9 +2505,7 @@ def get_market_summary(
 
 
 
-
-
-    latest_features = get_quantum_features(
+    features = get_quantum_features(
 
         historical
 
@@ -3838,12 +2513,7 @@ def get_market_summary(
 
 
 
-
-
-
-
     return {
-
 
 
         "ticker":
@@ -3890,13 +2560,13 @@ def get_market_summary(
 
 
 
-        "market_regime":
+        "market_strength":
 
-        latest_features.get(
+        features.get(
 
             "market_strength",
 
-            None
+            0
 
         ),
 
@@ -3904,14 +2574,13 @@ def get_market_summary(
 
         "quantum_score":
 
-        latest_features.get(
+        features.get(
 
             "market_strength",
 
-            None
+            0
 
         )
-
 
 
     }
@@ -3922,19 +2591,24 @@ def get_market_summary(
 
 
 
+
 # ============================================================
-# MODEL INPUT CHECK
+# QUANTUM FEATURE VALIDATION
 # ============================================================
 
 
-def validate_quantum_features(
+def validate_quantum_features(features):
 
-    features
 
-):
+    if not features:
+
+
+        return False
+
 
 
     required = [
+
 
         "price",
 
@@ -3945,6 +2619,7 @@ def validate_quantum_features(
         "market_strength",
 
         "rsi"
+
 
     ]
 
@@ -3960,8 +2635,6 @@ def validate_quantum_features(
 
 
 
-
-
     return True
 
 
@@ -3970,8 +2643,9 @@ def validate_quantum_features(
 
 
 
+
 # ============================================================
-# FINAL DATA PROVIDER HEALTH CHECK
+# PROVIDER HEALTH CHECK
 # ============================================================
 
 
@@ -3981,11 +2655,9 @@ def provider_health_check():
     status = {
 
 
-
         "Yahoo_API":
 
         False,
-
 
 
         "Cache":
@@ -3993,17 +2665,14 @@ def provider_health_check():
         True,
 
 
-
         "Indicators":
 
         True,
 
 
-
         "Quantum_Features":
 
         True
-
 
 
     }
@@ -4028,23 +2697,32 @@ def provider_health_check():
 
 
 
+    except Exception as error:
 
 
-    except Exception:
+        print(
 
+            "Health check error:",
 
-        pass
+            error
 
-
+        )
 
 
 
     return status
-    # ============================================================
+
+
+
+
+
+# ============================================================
+# END PART 5
+# ============================================================
+# ============================================================
 # DATA_PROVIDER.PY PART 6/6
 # PRODUCTION HELPERS + EXPORT SYSTEM + TESTING
 # ============================================================
-
 
 
 # ============================================================
@@ -4052,13 +2730,7 @@ def provider_health_check():
 # ============================================================
 
 
-def export_market_data(
-
-    ticker,
-
-    dataframe
-
-):
+def export_market_data(ticker, dataframe):
 
 
     try:
@@ -4071,14 +2743,10 @@ def export_market_data(
 
 
 
-
-
         if dataframe.empty:
 
 
             return False
-
-
 
 
 
@@ -4104,14 +2772,12 @@ def export_market_data(
 
 
 
-
-
     except Exception as error:
 
 
         print(
 
-            "Export failed:",
+            "Export error:",
 
             error
 
@@ -4125,20 +2791,15 @@ def export_market_data(
 
 
 
-
 # ============================================================
 # FEATURE SUMMARY
 # ============================================================
 
 
-def get_feature_summary(
-
-    ticker
-
-):
+def get_feature_summary(ticker):
 
 
-    data = get_stock_data(
+    dataframe = get_stock_data(
 
         ticker
 
@@ -4146,23 +2807,18 @@ def get_feature_summary(
 
 
 
-    if data.empty:
+    if dataframe.empty:
 
 
         return {}
 
 
 
-
-
-    latest = data.iloc[-1]
-
-
+    latest = dataframe.iloc[-1]
 
 
 
     return {
-
 
 
         "Ticker":
@@ -4251,7 +2907,7 @@ def get_feature_summary(
 
 
 
-        "Regime":
+        "Market Regime":
 
         latest.get(
 
@@ -4262,7 +2918,6 @@ def get_feature_summary(
         )
 
 
-
     }
 
 
@@ -4271,24 +2926,19 @@ def get_feature_summary(
 
 
 
+
 # ============================================================
-# MODEL COMPATIBILITY CHECK
+# QUANTUM MODEL COMPATIBILITY CHECK
 # ============================================================
 
 
-def quantum_model_ready(
-
-    dataframe
-
-):
+def quantum_model_ready(dataframe):
 
 
     if dataframe is None:
 
 
         return False
-
-
 
 
 
@@ -4299,9 +2949,8 @@ def quantum_model_ready(
 
 
 
+    required = [
 
-
-    required_features = [
 
         "Close",
 
@@ -4315,13 +2964,12 @@ def quantum_model_ready(
 
         "RSI"
 
+
     ]
 
 
 
-
-
-    for feature in required_features:
+    for feature in required:
 
 
         if feature not in dataframe.columns:
@@ -4331,8 +2979,6 @@ def quantum_model_ready(
 
 
 
-
-
     return True
 
 
@@ -4341,37 +2987,47 @@ def quantum_model_ready(
 
 
 
+
 # ============================================================
-# APPLICATION STARTUP CHECK
+# PROVIDER INITIALIZATION
 # ============================================================
 
 
 def initialize_provider():
 
 
-    folders = [
-
-        DATA_FOLDER
-
-    ]
+    try:
 
 
-
-    for folder in folders:
-
-
-        if not os.path.exists(folder):
+        if not os.path.exists(DATA_FOLDER):
 
 
             os.makedirs(
 
-                folder
+                DATA_FOLDER
 
             )
 
 
 
-    return True
+        return True
+
+
+
+    except Exception as error:
+
+
+        print(
+
+            "Initialization error:",
+
+            error
+
+        )
+
+
+        return False
+
 
 
 
@@ -4380,13 +3036,13 @@ def initialize_provider():
 
 
 # ============================================================
-# DATA PROVIDER VERSION
+# VERSION INFORMATION
 # ============================================================
 
 
 DATA_PROVIDER_VERSION = (
 
-    "Quantum Equity Data Engine v2.0"
+    "Quantum Equity Data Engine v2.1"
 
 )
 
@@ -4396,17 +3052,16 @@ DATA_PROVIDER_VERSION = (
 
 
 
+
 # ============================================================
-# FINAL DEBUG INFORMATION
+# DEBUG INFORMATION
 # ============================================================
 
 
 def debug_information():
 
 
-
     return {
-
 
 
         "version":
@@ -4423,36 +3078,29 @@ def debug_information():
 
         "cache":
 
-        "Enabled",
+        "Streamlit cache enabled",
 
 
 
-        "features":
+        "systems":
 
         [
 
-            "Returns",
 
-            "Log Returns",
+            "Yahoo Data Connector",
 
-            "SMA",
+            "Local CSV Backup",
 
-            "RSI",
+            "Technical Indicators",
 
-            "MACD",
+            "Market Regime Detection",
 
-            "Momentum",
-
-            "Volatility",
-
-            "Drawdown",
-
-            "Market Regime",
+            "Risk Engine",
 
             "Quantum Feature Vector"
 
-        ]
 
+        ]
 
 
     }
@@ -4463,8 +3111,92 @@ def debug_information():
 
 
 
+
 # ============================================================
-# TESTING
+# FULL PROVIDER TEST
+# ============================================================
+
+
+def run_provider_test():
+
+
+    initialize_provider()
+
+
+
+    ticker = "AAPL"
+
+
+
+    output = {}
+
+
+
+    try:
+
+
+        data = get_stock_data(
+
+            ticker
+
+        )
+
+
+
+        output["historical_loaded"] = (
+
+            not data.empty
+
+        )
+
+
+
+        output["rows"] = len(
+
+            data
+
+        )
+
+
+
+        output["quantum_ready"] = quantum_model_ready(
+
+            data
+
+        )
+
+
+
+        output["features"] = get_feature_summary(
+
+            ticker
+
+        )
+
+
+
+        output["health"] = provider_health_check()
+
+
+
+    except Exception as error:
+
+
+        output["error"] = str(error)
+
+
+
+    return output
+
+
+
+
+
+
+
+
+# ============================================================
+# LOCAL TESTING
 # ============================================================
 
 
@@ -4473,127 +3205,36 @@ if __name__ == "__main__":
 
     print(
 
-        "Starting Quantum Equity Data Provider Test"
+        "Starting Quantum Data Provider Test"
 
     )
 
 
 
-    initialize_provider()
+    results = run_provider_test()
 
 
 
-    test_symbol = "AAPL"
-
-
-
-
-
-    print(
-
-        "\nFetching historical data..."
-
-    )
-
-
-
-    data = get_stock_data(
-
-        test_symbol
-
-    )
-
-
-
-    if data.empty:
+    for key, value in results.items():
 
 
         print(
 
-            "No data returned"
+            "\n",
+
+            key,
+
+            ":",
+
+            value
 
         )
 
-
-    else:
-
-
-        print(
-
-            data.tail()
-
-        )
-
-
-
-
-
-    print(
-
-        "\nFetching live price..."
-
-    )
-
-
-
-    live = get_live_price(
-
-        test_symbol
-
-    )
-
-
-
-    print(
-
-        live
-
-    )
-
-
-
-
-
-    print(
-
-        "\nFeature Summary"
-
-    )
-
-
-
-    print(
-
-        get_feature_summary(
-
-            test_symbol
-
-        )
-
-    )
-
-
-
-
-
-    print(
-
-        "\nProvider Health"
-
-    )
-
-
-
-    print(
-
-        provider_health_check()
-
-    )
 
 
 
 
 
 # ============================================================
-# END OF DATA_PROVIDER.PY
+# END DATA_PROVIDER.PY
 # ============================================================
