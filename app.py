@@ -20,8 +20,6 @@ from data_provider import (
 
     get_company_info,
 
-    get_market_status,
-
     format_price,
 
     format_percent,
@@ -425,7 +423,7 @@ if live_data:
 
 
 
-header1, header2, header3, header4 = st.columns(4)
+header1, header2, header3 = st.columns(3)
 
 
 
@@ -499,21 +497,6 @@ with header3:
 
 
 
-
-with header4:
-
-
-    st.metric(
-
-        "Market Status",
-
-        get_market_status(
-
-            live_data
-
-        )
-
-    )
 
 
 
