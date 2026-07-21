@@ -141,52 +141,52 @@ if not st.session_state.started:
 
 
     st.markdown(
-"""
-<style>
+    """
+    <style>
 
-div[data-testid="stButton"] button {
-    background: linear-gradient(
-        135deg,
-        #00ff88,
-        #00cc66
-    );
+    div[data-testid="stButton"] button {
+        background: linear-gradient(
+            135deg,
+            #00ff88,
+            #00cc66
+        );
 
-    color: black;
+        color: black;
 
-    font-size: 22px;
+        font-size: 22px;
 
-    font-weight: 800;
+        font-weight: 800;
 
-    border-radius: 16px;
+        border-radius: 16px;
 
-    border: 2px solid #00ff88;
+        border: 2px solid #00ff88;
 
-    padding: 16px;
+        padding: 16px;
 
-    transition: all 0.3s ease;
-}
-
-
-div[data-testid="stButton"] button:hover {
-
-    transform: scale(1.08);
-
-    box-shadow:
-    0 0 25px #00ff88,
-    0 0 50px rgba(0,255,136,0.5);
-
-}
-
-</style>
-""",
-unsafe_allow_html=True
-)
+        transition: all 0.3s ease;
+    }
 
 
-start = st.button(
-    "🚀 Start Quantum Simulation",
-    use_container_width=True
-)
+    div[data-testid="stButton"] button:hover {
+
+        transform: scale(1.08);
+
+        box-shadow:
+        0 0 25px #00ff88,
+        0 0 50px rgba(0,255,136,0.5);
+
+    }
+
+    </style>
+    """,
+    unsafe_allow_html=True
+    )
+
+
+    start = st.button(
+        "🚀 Start Quantum Simulation",
+        use_container_width=True
+    )
 
 
     if start:
