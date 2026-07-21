@@ -110,7 +110,6 @@ selected_ticker = (
 )
 
 
-
 forecast_days = st.sidebar.slider(
     "Forecast Time Horizon (Days):",
     min_value=1,
@@ -119,14 +118,12 @@ forecast_days = st.sidebar.slider(
 )
 
 
-
 num_qubits = st.sidebar.slider(
     "Quantum Register Resolution:",
     min_value=3,
-    max_value=12,
-    value=10
+    max_value=9,
+    value=6
 )
-
 
 
 shots = st.sidebar.selectbox(
@@ -140,13 +137,11 @@ shots = st.sidebar.selectbox(
 )
 
 
-
-if num_qubits >= 11:
+if num_qubits >= 8:
 
     st.sidebar.warning(
-        "High qubit settings require more memory."
+        "Higher qubit settings require more memory."
     )
-
 
 
 run_button = st.sidebar.button(
@@ -162,7 +157,7 @@ run_button = st.sidebar.button(
 # ============================================================
 
 @st.cache_data(
-    ttl=600,
+    ttl=3600,
     max_entries=50
 )
 def get_stock_data(ticker):
@@ -171,13 +166,18 @@ def get_stock_data(ticker):
 
         data = yf.download(
             ticker,
-            period="1y",
-            progress=False,
-            auto_adjust=True
+            period="2y",
+            interval="1d",
+            auto_adjust=False,
+            progress=False
         )
 
 
-    except Exception:
+    except Exception as error:
+
+        st.error(
+            f"Yahoo Finance error: {error}"
+        )
 
         return pd.Series(dtype=float)
 
@@ -189,25 +189,33 @@ def get_stock_data(ticker):
 
 
 
-    if "Close" not in data:
+    if isinstance(data.columns, pd.MultiIndex):
 
-        return pd.Series(dtype=float)
+        if ("Close", ticker) in data.columns:
+
+            close_prices = data[
+                ("Close", ticker)
+            ]
+
+        elif "Close" in data.columns.get_level_values(0):
+
+            close_prices = (
+                data["Close"]
+                .iloc[:, 0]
+            )
+
+        else:
+
+            return pd.Series(dtype=float)
 
 
+    else:
 
-    close_prices = data["Close"]
+        if "Close" not in data.columns:
 
+            return pd.Series(dtype=float)
 
-
-    if isinstance(
-        close_prices,
-        pd.DataFrame
-    ):
-
-        close_prices = (
-            close_prices
-            .iloc[:, 0]
-        )
+        close_prices = data["Close"]
 
 
 
@@ -216,14 +224,6 @@ def get_stock_data(ticker):
         .dropna()
         .astype(float)
     )
-
-
-
-    return close_prices
-
-
-
-
 # ============================================================
 # QUANTUM ENGINE
 # ============================================================
@@ -245,13 +245,11 @@ def run_quantum_engine(
     )
 
 
-
     if prices.empty:
 
         raise ValueError(
-            f"No price data found for {ticker}"
+            f"No price data found for {ticker}. Check ticker or Yahoo Finance connection."
         )
-
 
 
     returns = np.log(
@@ -278,6 +276,7 @@ def run_quantum_engine(
     mu = float(
         returns.mean()
     )
+
 
 
     sigma = float(
@@ -331,6 +330,7 @@ def run_quantum_engine(
             volatility_range
         )
     )
+
 
 
     max_price = (
@@ -394,6 +394,7 @@ def run_quantum_engine(
     )
 
 
+
     if distribution_sum == 0:
 
         raise ValueError(
@@ -403,14 +404,6 @@ def run_quantum_engine(
 
 
     distribution /= distribution_sum
-
-
-
-    if len(distribution) != states:
-
-        raise ValueError(
-            "Quantum state size mismatch."
-        )
 
 
 
@@ -429,6 +422,7 @@ def run_quantum_engine(
         np.sqrt(distribution),
         range(qubits)
     )
+
 
 
     circuit.measure_all()
@@ -465,26 +459,44 @@ def run_quantum_engine(
             2
         )
 
-        quantum_probs[index] = (
-            count /
-            measurement_shots
+
+        if index < states:
+
+            quantum_probs[index] = (
+                count /
+                measurement_shots
+            )
+
+
+
+    probability_sum = np.sum(
+        quantum_probs
+    )
+
+
+
+    if probability_sum == 0:
+
+        raise ValueError(
+            "Quantum simulation returned no probability."
         )
 
 
 
-    quantum_probs /= np.sum(
-        quantum_probs
-    )
+    quantum_probs /= probability_sum
 
-# ============================================================
-# RISK CALCULATIONS
-# ============================================================
+
+
+    # ========================================================
+    # RISK CALCULATIONS
+    # ========================================================
 
 
     expected_price = np.sum(
         price_grid *
         quantum_probs
     )
+
 
 
     expected_pct = (
@@ -510,6 +522,7 @@ def run_quantum_engine(
     )
 
 
+
     if var_index >= len(price_grid):
 
         var_index = len(price_grid) - 1
@@ -519,6 +532,7 @@ def run_quantum_engine(
     var_95_price = (
         price_grid[var_index]
     )
+
 
 
     var_95_pct = (
@@ -532,6 +546,7 @@ def run_quantum_engine(
             :var_index + 1
         ]
     )
+
 
 
     tail_probs = (
@@ -552,6 +567,7 @@ def run_quantum_engine(
             /
             np.sum(tail_probs)
         )
+
 
     else:
 
@@ -631,11 +647,10 @@ def run_quantum_engine(
         "prob_down_5": prob_down_5,
 
         "prices": prices
+
     }
 
-
-
-# ============================================================
+    # ============================================================
 # RUN ANALYSIS
 # ============================================================
 
@@ -747,14 +762,6 @@ with tab1:
     )
 
 
-
-    time_axis = np.arange(
-        0,
-        forecast_days + 1
-    )
-
-
-
     percentile_levels = [
         0.05,
         0.20,
@@ -766,9 +773,7 @@ with tab1:
     ]
 
 
-
     percentile_returns = []
-
 
 
     for level in percentile_levels:
@@ -778,10 +783,12 @@ with tab1:
             level
         )
 
+
         index = min(
             index,
             len(data["pct_grid"]) - 1
         )
+
 
         percentile_returns.append(
             data["pct_grid"][index]
@@ -789,11 +796,16 @@ with tab1:
 
 
 
+    time_axis = np.arange(
+        0,
+        forecast_days + 1
+    )
+
+
     time_factor = np.sqrt(
         time_axis /
         forecast_days
     )
-
 
 
     paths = [
@@ -807,7 +819,7 @@ with tab1:
 
 
     fig, ax = plt.subplots(
-        figsize=(10, 4)
+        figsize=(10,4)
     )
 
 
@@ -871,15 +883,12 @@ with tab1:
     ax.legend()
 
 
-
     st.pyplot(
         fig
     )
 
 
-    plt.close(
-        fig
-    )
+    plt.close(fig)
 
 
 
@@ -895,112 +904,102 @@ with tab2:
     )
 
 
-    left, right = st.columns(
-        [2,1]
+    fig2, ax2 = plt.subplots(
+        figsize=(8,4)
+    )
+
+
+    ax2.plot(
+        data["pct_grid"],
+        data["quantum_probs"],
+        linewidth=2
+    )
+
+
+    ax2.fill_between(
+        data["pct_grid"],
+        data["quantum_probs"],
+        alpha=0.25
+    )
+
+
+    ax2.axvline(
+        data["expected_pct"],
+        linestyle="-",
+        label="Expected"
+    )
+
+
+    ax2.axvline(
+        data["var_95_pct"],
+        linestyle="--",
+        label="VaR"
+    )
+
+
+    ax2.set_xlabel(
+        "Return (%)"
+    )
+
+
+    ax2.set_ylabel(
+        "Probability"
+    )
+
+
+    ax2.legend()
+
+
+    ax2.grid(
+        True,
+        alpha=0.25
+    )
+
+
+    st.pyplot(
+        fig2
+    )
+
+
+    plt.close(fig2)
+
+
+
+    st.markdown(
+        "### Risk Metrics"
+    )
+
+
+    st.write(
+        f"Expected Price: ${data['expected_price']:.2f}"
+    )
+
+
+    st.write(
+        f"VaR 95%: {data['var_95_pct']:.2f}%"
+    )
+
+
+    st.write(
+        f"Expected Tail Loss: {data['etl_pct']:.2f}%"
+    )
+
+
+    st.write(
+        f"+5% Gain Probability: {data['prob_up_5']:.1f}%"
+    )
+
+
+    st.write(
+        f"-5% Loss Probability: {data['prob_down_5']:.1f}%"
     )
 
 
 
-    with left:
-
-        fig2, ax2 = plt.subplots(
-            figsize=(8,4)
-        )
-
-
-        ax2.plot(
-            data["pct_grid"],
-            data["quantum_probs"],
-            linewidth=2
-        )
-
-
-        ax2.fill_between(
-            data["pct_grid"],
-            data["quantum_probs"],
-            alpha=0.25
-        )
-
-
-        ax2.axvline(
-            data["expected_pct"],
-            linestyle="-",
-            label="Expected"
-        )
-
-
-        ax2.axvline(
-            data["var_95_pct"],
-            linestyle="--",
-            label="VaR"
-        )
-
-
-        ax2.set_xlabel(
-            "Return (%)"
-        )
-
-
-        ax2.set_ylabel(
-            "Probability"
-        )
-
-
-        ax2.legend()
-
-
-        ax2.grid(
-            True,
-            alpha=0.25
-        )
-
-
-        st.pyplot(
-            fig2
-        )
-
-
-        plt.close(
-            fig2
-        )
-
-
-
-    with right:
-
-        st.markdown(
-            "### Risk Metrics"
-        )
-
-
-        st.write(
-            f"Expected Price: ${data['expected_price']:.2f}"
-        )
-
-
-        st.write(
-            f"VaR 95%: {data['var_95_pct']:.2f}%"
-        )
-
-
-        st.write(
-            f"Expected Tail Loss: {data['etl_pct']:.2f}%"
-        )
-
-
-        st.write(
-            f"+5% Gain Probability: {data['prob_up_5']:.1f}%"
-        )
-
-
-        st.write(
-            f"-5% Loss Probability: {data['prob_down_5']:.1f}%"
-        )
-
-    # Results continue in Part 2
 # ============================================================
-# EXECUTIVE REPORT TAB
+# REPORT TAB
 # ============================================================
+
 
 with tab3:
 
@@ -1009,11 +1008,7 @@ with tab3:
     )
 
 
-    if (
-        data["expected_pct"] > 1.5
-        and
-        data["prob_positive"] > 55
-    ):
+    if data["expected_pct"] > 1.5 and data["prob_positive"] > 55:
 
         signal = "🟢 BULLISH OUTLOOK"
 
@@ -1023,17 +1018,12 @@ with tab3:
         )
 
 
-    elif (
-        data["expected_pct"] < -1.5
-        or
-        data["prob_down_5"] > 30
-    ):
+    elif data["expected_pct"] < -1.5 or data["prob_down_5"] > 30:
 
         signal = "🔴 BEARISH / CAUTION"
 
         explanation = (
-            "The model indicates elevated downside risk "
-            "and negative return pressure."
+            "The model indicates increased downside risk."
         )
 
 
@@ -1042,8 +1032,7 @@ with tab3:
         signal = "🟡 NEUTRAL"
 
         explanation = (
-            "The forecast remains balanced with limited "
-            "directional bias."
+            "The forecast remains balanced."
         )
 
 
@@ -1058,10 +1047,6 @@ with tab3:
     )
 
 
-    st.markdown(
-        "### Analyst Summary"
-    )
-
 
     risk_ratio = (
         data["prob_up_5"]
@@ -1071,7 +1056,6 @@ with tab3:
             0.01
         )
     )
-
 
 
     st.write(
@@ -1102,41 +1086,13 @@ Upside vs Downside Ratio:
     )
 
 
-    st.markdown(
-        "### Model Interpretation"
-    )
-
-
-    if data["expected_pct"] > 0:
-
-        st.write(
-            """
-The simulated distribution favors positive price movement.
-The expected price sits above the current market price.
-"""
-        )
-
-    else:
-
-        st.write(
-            """
-The simulated distribution favors negative price movement.
-The expected price sits below the current market price.
-"""
-        )
-
-
 
 # ============================================================
 # RAW DATA TAB
 # ============================================================
 
+
 with tab4:
-
-    st.subheader(
-        "Quantum State Probability Matrix"
-    )
-
 
     raw_dataframe = pd.DataFrame(
         {
@@ -1151,19 +1107,15 @@ with tab4:
     )
 
 
-
     st.dataframe(
         raw_dataframe,
         width="stretch"
     )
 
 
-
     st.download_button(
         label="Download Simulation Data CSV",
-        data=raw_dataframe.to_csv(
-            index=False
-        ),
+        data=raw_dataframe.to_csv(index=False),
         file_name=f"{selected_ticker}_quantum_forecast.csv",
         mime="text/csv"
     )
@@ -1173,6 +1125,7 @@ with tab4:
 # ============================================================
 # HISTORICAL PRICE SECTION
 # ============================================================
+
 
 st.divider()
 
@@ -1194,7 +1147,7 @@ with st.expander(
 
 
     historical_ax.set_title(
-        f"{selected_ticker} 1-Year Price History"
+        f"{selected_ticker} Price History"
     )
 
 
@@ -1229,6 +1182,7 @@ with st.expander(
 # FOOTER
 # ============================================================
 
+
 st.divider()
 
 
@@ -1238,3 +1192,5 @@ Quantum Stock Forecast is an educational research model.
 Forecast outputs are statistical estimates and are not financial advice.
 """
 )
+
+    return close_prices
