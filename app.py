@@ -906,17 +906,21 @@ with header3:
         if daily_change >= 0:
 
             change_display = (
-                f"<span class='positive'>"
-                f"🟢 +{daily_change:.2f}%"
-                f"</span>"
+                f"""
+                <span class="positive">
+                🟢 +{daily_change:.2f}%
+                </span>
+                """
             )
 
         else:
 
             change_display = (
-                f"<span class='negative'>"
-                f"🔴 {daily_change:.2f}%"
-                f"</span>"
+                f"""
+                <span class="negative">
+                🔴 {daily_change:.2f}%
+                </span>
+                """
             )
 
     else:
@@ -924,6 +928,20 @@ with header3:
         change_display = "N/A"
 
 
+    st.markdown(
+        f"""
+        <div class="metric-box">
+
+            <h4>Daily Change</h4>
+
+            <h2>
+                {change_display}
+            </h2>
+
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
     st.markdown(
         f"""
         <div class="metric-box">
@@ -938,19 +956,6 @@ with header3:
         """,
         unsafe_allow_html=True
     )
-
-
-    st.metric(
-
-        "Daily Change",
-
-        change_display
-
-    )
-
-
-
-
 
 
 
