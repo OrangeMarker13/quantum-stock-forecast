@@ -343,78 +343,51 @@ st.sidebar.title(
 
 
 
-popular_assets = [
+# ============================================================
+# STOCK SEARCH
+# ============================================================
 
-    "AAPL",
 
-    "MSFT",
+search_query = st.sidebar.text_input(
 
-    "NVDA",
+    "Search Company or Symbol",
 
-    "GOOGL",
-
-    "AMZN",
-
-    "META",
-
-    "TSLA",
-
-    "AMD",
-
-    "NFLX",
-
-    "SPY",
-
-    "QQQ",
-
-    "BTC-USD"
-
-]
-
-search_term = st.sidebar.text_input(
-
-    "Search Stock Symbol",
-
-    value="AAPL"
+    value="Apple"
 
 )
 
 
-search_term = search_term.upper().strip()
+matches = search_stocks(
+
+    search_query
+
+)
 
 
-
-filtered_assets = [
-
-    stock
-
-    for stock in popular_assets
-
-    if search_term in stock
-
-]
+if matches:
 
 
+    selected = st.sidebar.selectbox(
 
-if filtered_assets:
+        "Select Asset",
 
+        matches,
 
-    selected_suggestion = st.sidebar.selectbox(
-
-        "Suggestions",
-
-        filtered_assets
+        format_func=lambda x: x["label"]
 
     )
 
 
-    ticker = selected_suggestion
+    ticker = selected["symbol"]
+
+    company_name = selected["name"]
 
 
 else:
 
+    ticker = search_query.upper().strip()
 
-    ticker = search_term
+    company_name = ticker
 
 
 forecast_days = st.sidebar.selectbox(
