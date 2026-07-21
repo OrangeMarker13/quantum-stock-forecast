@@ -1813,9 +1813,65 @@ def search_stocks(query):
             )
 
 
+            quote_type = item.get(
+                "quoteType",
+                ""
+            )
+
+
+            exchange = item.get(
+                "exchange",
+                ""
+            )
+
             if symbol and name:
 
+                priority = 0
+
+
+                # Prioritize normal listed stocks
+
+                if quote_type == "EQUITY":
+
+                    priority += 10
+
+
+                # Prioritize major exchanges
+
+                if exchange in [
+
+                    "NMS",
+                    "NYQ",
+                    "NGM",
+                    "PCX"
+
+                ]:
+
+                    priority += 5
+
+
+
                 results.append(
+
+                    {
+                        "label":
+                        f"{name} ({symbol})",
+
+
+                        "symbol":
+                        symbol,
+
+
+                        "name":
+                        name,
+
+
+                        "priority":
+                        priority
+
+                    }
+
+                )
 
                     {
 
