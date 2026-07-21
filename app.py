@@ -457,19 +457,14 @@ header1, header2, header3 = st.columns(3)
 
 with header1:
 
+    company_name = company.get(
+        "name",
+        ticker
+    )
 
     st.metric(
-
         "Company",
-
-        company.get(
-
-            "name",
-
-            ticker
-
-        )
-
+        company_name
     )
 
 
