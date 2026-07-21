@@ -1,3 +1,10 @@
+# ============================================================
+# APP.PY
+# Quantum Equity Research Terminal
+# Adaptive Quantum Forecast Engine
+# PART 1/6
+# ============================================================
+
 import streamlit as st
 import numpy as np
 import pandas as pd
@@ -16,10 +23,19 @@ from data_provider import (
     get_company_info,
     search_stocks,
     format_price,
-    format_percent,
     validate_market_data,
     clear_data_cache
 )
+
+
+# Prediction memory only evaluates past forecasts.
+# It does NOT modify adaptive factor weights.
+from prediction_memory import (
+    store_prediction,
+    evaluate_predictions,
+    get_prediction_adjustment
+)
+
 
 
 # ============================================================
@@ -34,110 +50,14 @@ st.set_page_config(
 )
 
 
-# ============================================================
-# LANDING PAGE
-# ============================================================
-
-if "started" not in st.session_state:
-    st.session_state.started = False
-
-
-if not st.session_state.started:
-
-    st.markdown(
-        """
-        <div style="
-        text-align:center;
-        padding:60px 20px;
-        ">
-
-        <h1 style="font-size:55px;">
-        ⚛️ Quantum Equity Research Terminal
-        </h1>
-
-        <h3>
-        Adaptive Quantum Market Probability Engine
-        </h3>
-
-        <p style="
-        font-size:20px;
-        color:#b8c1d1;
-        ">
-
-        Multi-factor forecasting using historical behavior,
-        adaptive weights, market variables, and quantum probability sampling.
-
-        </p>
-
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-
-    st.divider()
-
-
-    c1, c2, c3 = st.columns(3)
-
-
-    with c1:
-        st.markdown(
-            """
-            ### 📈 Market Intelligence
-
-            Momentum,
-            volatility,
-            trends,
-            and historical behavior.
-            """
-        )
-
-
-    with c2:
-        st.markdown(
-            """
-            ### ⚛️ Quantum Simulation
-
-            Probability distributions encoded into
-            quantum states and sampled.
-            """
-        )
-
-
-    with c3:
-        st.markdown(
-            """
-            ### 🛡 Risk Analytics
-
-            Scenario probabilities,
-            confidence,
-            and downside control.
-            """
-        )
-
-
-    st.divider()
-
-
-    if st.button(
-        "🚀 Start Quantum Simulation",
-        width="stretch"
-    ):
-
-        st.session_state.started = True
-        st.rerun()
-
-
-    st.stop()
-
-
 
 # ============================================================
 # SESSION STATE
 # ============================================================
 
-defaults = {
+DEFAULT_STATE = {
+
+    "started": False,
 
     "forecast": None,
 
@@ -147,20 +67,21 @@ defaults = {
 
     "last_price": None,
 
-    "risk_score": None,
-
     "confidence_score": None,
+
+    "risk_score": None,
 
     "market_regime": None,
 
-    "quantum_features": None
+    "prediction_id": None
 
 }
 
 
-for key, value in defaults.items():
+for key, value in DEFAULT_STATE.items():
 
     if key not in st.session_state:
+
         st.session_state[key] = value
 
 
@@ -177,7 +98,108 @@ st_autorefresh(
 
 
 # ============================================================
-# STYLE
+# LANDING PAGE
+# ============================================================
+
+if not st.session_state.started:
+
+
+    st.markdown(
+        """
+        <div style="
+        text-align:center;
+        padding:55px 15px;
+        ">
+
+        <h1 style="font-size:52px;">
+        ⚛️ Quantum Equity Research Terminal
+        </h1>
+
+        <h3>
+        Adaptive Quantum Market Probability Engine
+        </h3>
+
+        <p style="
+        font-size:19px;
+        color:#b8c1d1;
+        ">
+
+        Multi-factor market forecasting using
+        historical behavior, risk analysis,
+        probability modeling, and quantum sampling.
+
+        </p>
+
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+    st.divider()
+
+
+    col1, col2, col3 = st.columns(3)
+
+
+    with col1:
+
+        st.markdown(
+            """
+            ### 📈 Market Intelligence
+
+            Technical indicators,
+            volatility,
+            momentum,
+            and market regimes.
+            """
+        )
+
+
+    with col2:
+
+        st.markdown(
+            """
+            ### ⚛️ Quantum Simulation
+
+            Probability states,
+            quantum encoding,
+            and scenario sampling.
+            """
+        )
+
+
+    with col3:
+
+        st.markdown(
+            """
+            ### 🧠 Forward Learning
+
+            Tracks prediction accuracy
+            without changing model weights.
+            """
+        )
+
+
+    st.divider()
+
+
+    if st.button(
+        "🚀 Start Quantum Simulation",
+        width="stretch"
+    ):
+
+        st.session_state.started = True
+
+        st.rerun()
+
+
+    st.stop()
+
+
+
+# ============================================================
+# PAGE STYLE
 # ============================================================
 
 st.markdown(
@@ -215,6 +237,7 @@ color:#22d3ee !important;
 .metric-box {
 
 background:
+
 linear-gradient(
 145deg,
 #111827,
@@ -223,9 +246,9 @@ linear-gradient(
 
 border:1px solid #334155;
 
-padding:18px;
+padding:16px;
 
-border-radius:16px;
+border-radius:14px;
 
 }
 
@@ -247,7 +270,6 @@ font-weight:800;
 
 }
 
-
 </style>
 """,
 unsafe_allow_html=True
@@ -265,16 +287,24 @@ st.title(
 
 
 st.caption(
-    "Adaptive weighted quantum probability forecasting."
+    "Adaptive weighted quantum probability forecasting with forward accuracy tracking."
 )
 
 
 st.divider()
 # ============================================================
+# APP.PY PART 2/6
+# CONTROLS + LIVE DATA + MARKET LOADING
+# ============================================================
+
+
+# ============================================================
 # SIDEBAR CONTROLS
 # ============================================================
 
-st.sidebar.title("⚛️ Quantum Forecast Controls")
+st.sidebar.title(
+    "⚛️ Quantum Forecast Controls"
+)
 
 
 search_query = st.sidebar.text_input(
@@ -283,71 +313,133 @@ search_query = st.sidebar.text_input(
 )
 
 
+
+# ------------------------------------------------------------
+# STOCK SEARCH
+# ------------------------------------------------------------
+
 try:
-    matches = search_stocks(search_query)
-except Exception:
-    matches = []
 
-
-if matches:
-
-    selected = st.sidebar.selectbox(
-        "Select Asset",
-        matches,
-        format_func=lambda x: x.get(
-            "label",
-            x.get("symbol", "Unknown")
-        )
+    search_results = search_stocks(
+        search_query
     )
 
-    ticker = selected.get(
+except Exception:
+
+    search_results = []
+
+
+
+if search_results:
+
+
+    selected_asset = st.sidebar.selectbox(
+
+        "Select Asset",
+
+        search_results,
+
+        format_func=lambda x:
+            x.get(
+                "label",
+                x.get(
+                    "symbol",
+                    "Unknown"
+                )
+            )
+
+    )
+
+
+    ticker = selected_asset.get(
         "symbol",
         search_query.upper()
     )
 
-    company_name = selected.get(
+
+    company_name = selected_asset.get(
         "name",
         ticker
     )
 
+
 else:
 
-    ticker = search_query.upper().strip()
+
+    ticker = (
+        search_query
+        .upper()
+        .strip()
+    )
+
+
     company_name = ticker
 
 
 
+# ------------------------------------------------------------
+# FORECAST SETTINGS
+# ------------------------------------------------------------
+
 forecast_days = st.sidebar.selectbox(
+
     "Forecast Horizon",
-    [7,30,60,90],
+
+    [
+        1,
+        2,
+        7,
+        30,
+        60,
+        90
+    ],
+
     index=3
+
 )
+
 
 
 qubits = st.sidebar.slider(
+
     "Quantum Qubits",
+
     3,
+
     8,
+
     6
+
 )
+
 
 
 shots = st.sidebar.slider(
+
     "Quantum Shots",
+
     500,
+
     5000,
+
     2000,
+
     step=500
+
 )
+
 
 
 st.sidebar.info(
 """
-Quantum sampling:
-Higher qubits = more market states.
-Higher shots = smoother probability sampling.
+Quantum simulation:
+
+Qubits control possible market states.
+
+Shots control probability sampling accuracy.
 """
 )
+
 
 
 run_button = st.sidebar.button(
@@ -356,192 +448,741 @@ run_button = st.sidebar.button(
 
 
 
+
+
 # ============================================================
-# LIVE DATA
+# LIVE MARKET DATA
 # ============================================================
 
+
 try:
-    live_data = get_live_price(ticker)
+
+    live_data = get_live_price(
+        ticker
+    )
+
 except Exception:
+
     live_data = None
 
 
+
 try:
-    company = get_company_info(ticker)
+
+    company = get_company_info(
+        ticker
+    )
+
 except Exception:
+
     company = {}
+
+
 
 
 current_price = None
 
+
 if live_data:
-    current_price = live_data.get("price")
+
+    current_price = live_data.get(
+        "price"
+    )
 
 
 
-h1,h2,h3 = st.columns(3)
 
 
-with h1:
+# ============================================================
+# MARKET HEADER DISPLAY
+# ============================================================
+
+
+info1, info2, info3 = st.columns(3)
+
+
+
+with info1:
+
 
     st.metric(
+
         "Company",
+
         company.get(
             "name",
             company_name
         )
+
     )
 
 
-with h2:
+
+
+with info2:
+
 
     st.metric(
+
         "Live Price",
-        format_price(current_price)
-    )
 
-
-with h3:
-
-    change = 0
-
-    if live_data:
-        change = live_data.get(
-            "change_percent",
-            0
+        format_price(
+            current_price
         )
 
-    try:
-        change=float(change)
-    except:
-        change=0
+    )
 
-    cls="positive" if change>=0 else "negative"
+
+
+
+with info3:
+
+
+    # Reliable daily change
+
+    daily_change = 0.0
+
+
+    if live_data:
+
+
+        daily_change = live_data.get(
+
+            "change_percent",
+
+            0
+
+        )
+
+
+    try:
+
+        daily_change = float(
+            daily_change
+        )
+
+    except Exception:
+
+        daily_change = 0.0
+
+
+
+    color_class = (
+
+        "positive"
+
+        if daily_change >= 0
+
+        else
+
+        "negative"
+
+    )
+
+
 
     st.markdown(
+
         f"""
+
         <div class="metric-box">
+
         <h4>Daily Change</h4>
-        <h2 class="{cls}">
-        {change:+.2f}%
+
+        <h2 class="{color_class}">
+
+        {daily_change:+.2f}%
+
         </h2>
+
         </div>
+
         """,
+
         unsafe_allow_html=True
+
     )
+
+
 
 
 st.caption(
-    f"Last update {datetime.datetime.now().strftime('%H:%M:%S')}"
+
+    f"Last market update: {datetime.datetime.now().strftime('%H:%M:%S')}"
+
 )
 
 
 
+
+
 # ============================================================
-# HISTORICAL DATA
+# HISTORICAL MARKET DATA
 # ============================================================
+
 
 @st.cache_data(
+
     ttl=900,
+
     max_entries=50
+
 )
+
 def load_market_data(symbol):
+
 
     try:
 
-        data=get_stock_data(symbol)
 
-        if not validate_market_data(data):
+        data = get_stock_data(
+            symbol
+        )
+
+
+        if not validate_market_data(
+            data
+        ):
+
             return pd.DataFrame()
+
+
 
         return data
 
+
+
     except Exception:
+
 
         return pd.DataFrame()
 
 
 
-market_data=load_market_data(ticker)
+
+
+market_data = load_market_data(
+    ticker
+)
+
+
+
 
 
 if market_data.empty:
+
 
     st.error(
         "No market data available."
     )
 
+
     if st.button(
         "Clear Cache"
     ):
 
+
         clear_data_cache()
+
         st.cache_data.clear()
+
         st.rerun()
 
+
     st.stop()
+
+
+
+
+
+# ============================================================
+# DATA CLEANING
+# ============================================================
+
+
+market_data = market_data.copy()
 
 
 
 if "Close" not in market_data.columns:
 
+
     st.error(
-        "Missing Close price data."
+        "Missing closing price data."
     )
+
 
     st.stop()
 
 
 
-market_data=market_data.copy()
 
+market_data["Close"] = pd.to_numeric(
 
-market_data["Close"]=pd.to_numeric(
     market_data["Close"],
+
     errors="coerce"
+
 )
 
 
-market_data.dropna(
-    subset=["Close"],
-    inplace=True
+
+market_data = market_data.dropna(
+
+    subset=[
+        "Close"
+    ]
+
 )
 
 
-if len(market_data)<120:
+
+
+if len(market_data) < 120:
+
 
     st.error(
-        "Need at least 120 trading days."
+
+        "Insufficient historical data. Need at least 120 trading days."
+
     )
 
+
     st.stop()
-
+    # ============================================================
+# APP.PY PART 3/6
+# EXTERNAL DATA + FEATURE PIPELINE
+# ============================================================
 
 
 # ============================================================
-# EXTERNAL DATA CONNECTION
+# EXTERNAL MARKET FEATURE ENGINE
 # ============================================================
 
-def get_external_features():
+def get_external_features(symbol):
+
+    """
+    External factors layer.
+
+    These values represent additional market information.
+    They are independent from adaptive weight calculation.
+
+    Future integrations:
+    - Federal Reserve rates
+    - CPI/inflation
+    - Sector ETFs
+    - Market indices
+    - Earnings data
+    - News sentiment APIs
+    """
+
 
     return {
 
-        "macro_score":0,
-        "sector_score":0,
-        "sentiment_score":0,
-        "global_market_score":0,
-        "earnings_score":0,
-        "rate_score":0
+
+        # Macroeconomic environment
+
+        "macro_score": 0.0,
+
+
+        # Industry performance
+
+        "sector_score": 0.0,
+
+
+        # News/social sentiment
+
+        "sentiment_score": 0.0,
+
+
+        # Global market movement
+
+        "global_market_score": 0.0,
+
+
+        # Earnings impact
+
+        "earnings_score": 0.0,
+
+
+        # Interest rate environment
+
+        "rate_score": 0.0
+
 
     }
 
 
-external_features=get_external_features()
 
-st.session_state.quantum_features=external_features
+
+
+external_features = get_external_features(
+    ticker
+)
+
+
+
+
+
+# ============================================================
+# PREDICTION MEMORY STATUS
+# ============================================================
+
+
+def apply_prediction_calibration(
+    base_prediction,
+    symbol,
+    horizon
+):
+
+    """
+    Applies historical forecast calibration.
+
+    This DOES NOT:
+    - change factor weights
+    - change market signals
+    - change quantum probability
+
+    It only corrects systematic
+    prediction error.
+    """
+
+
+    try:
+
+
+        adjustment = get_prediction_adjustment(
+
+            symbol,
+
+            horizon
+
+        )
+
+
+        adjustment = float(
+            adjustment
+        )
+
+
+        # Safety limit prevents bias
+
+        adjustment = np.clip(
+
+            adjustment,
+
+            -0.05,
+
+            0.05
+
+        )
+
+
+
+        return (
+
+            base_prediction
+
+            *
+
+            (1 + adjustment)
+
+        )
+
+
+
+    except Exception:
+
+
+        return base_prediction
+
+
+
+
+
+
+# ============================================================
+# MARKET DATA PREPARATION
+# ============================================================
+
+
+def prepare_market_features(data):
+
+
+    if data is None:
+
+        return pd.DataFrame()
+
+
+
+    if data.empty:
+
+        return data
+
+
+
+    prepared = data.copy()
+
+
+
+    # Ensure numerical stability
+
+
+    numeric_columns = prepared.select_dtypes(
+
+        include=[
+            np.number
+        ]
+
+    ).columns
+
+
+
+    prepared[numeric_columns] = prepared[
+
+        numeric_columns
+
+    ].replace(
+
+        [
+            np.inf,
+
+            -np.inf
+
+        ],
+
+        np.nan
+
+    )
+
+
+
+    prepared[numeric_columns] = prepared[
+
+        numeric_columns
+
+    ].fillna(0)
+
+
+
+    return prepared
+
+
+
+
+
+market_data = prepare_market_features(
+    market_data
+)
+
+
+
+
+
+# ============================================================
+# QUANTUM FEATURE EXTRACTION
+# ============================================================
+
+
+def extract_quantum_inputs(data):
+
+
+    if data.empty:
+
+        return {}
+
+
+
+    latest = data.iloc[-1]
+
+
+
+    return {
+
+
+        "price":
+
+        float(
+
+            latest.get(
+
+                "Close",
+
+                0
+
+            )
+
+        ),
+
+
+
+        "volatility":
+
+        float(
+
+            latest.get(
+
+                "Volatility",
+
+                0
+
+            )
+
+        ),
+
+
+
+        "momentum":
+
+        float(
+
+            latest.get(
+
+                "Momentum_20",
+
+                0
+
+            )
+
+        ),
+
+
+
+        "market_strength":
+
+        float(
+
+            latest.get(
+
+                "Market_Strength",
+
+                50
+
+            )
+
+        ),
+
+
+
+        "rsi":
+
+        float(
+
+            latest.get(
+
+                "RSI",
+
+                50
+
+            )
+
+        )
+
+    }
+
+
+
+
+
+quantum_inputs = extract_quantum_inputs(
+    market_data
+)
+
+
+
+
+
+# ============================================================
+# MODEL VALIDATION
+# ============================================================
+
+
+def validate_model_inputs(
+    data,
+    features
+):
+
+
+    if data.empty:
+
+        return False
+
+
+
+    required_columns = [
+
+        "Close",
+
+    ]
+
+
+
+    for column in required_columns:
+
+
+        if column not in data.columns:
+
+            return False
+
+
+
+    required_features = [
+
+        "price",
+
+        "volatility",
+
+        "momentum",
+
+        "market_strength",
+
+        "rsi"
+
+    ]
+
+
+
+    for feature in required_features:
+
+
+        if feature not in features:
+
+            return False
+
+
+
+    return True
+
+
+
+
+
+model_ready = validate_model_inputs(
+
+    market_data,
+
+    quantum_inputs
+
+)
+
+
+
+
+
+if not model_ready:
+
+
+    st.error(
+        "Model input validation failed."
+    )
+
+
+    st.stop()
     # ============================================================
+# APP.PY PART 4/6
 # QUANTUM FORECAST ENGINE
 # ============================================================
+
 
 @st.cache_data(
     ttl=600,
@@ -556,32 +1197,56 @@ def quantum_forecast(
     external_features
 ):
 
+
     prices = (
+
         market_data["Close"]
+
         .astype(float)
+
         .dropna()
+
     )
+
+
 
     if len(prices) < 120:
-        raise ValueError("Insufficient historical data")
+
+        raise ValueError(
+            "Insufficient historical data"
+        )
 
 
-    S0 = float(starting_price)
+
+    S0 = float(
+        starting_price
+    )
+
 
 
     # ========================================================
-    # RETURNS + VOLATILITY
+    # RETURN ENGINE
     # ========================================================
+
 
     returns = (
+
         prices
+
         .pct_change()
+
         .replace(
-            [np.inf,-np.inf],
+            [
+                np.inf,
+                -np.inf
+            ],
             np.nan
         )
+
         .dropna()
+
     )
+
 
 
     daily_vol = float(
@@ -589,89 +1254,230 @@ def quantum_forecast(
     )
 
 
+
     if daily_vol <= 0:
+
         daily_vol = 0.01
 
 
-    annual_vol = daily_vol * np.sqrt(252)
+
+    annual_vol = (
+
+        daily_vol
+
+        *
+
+        np.sqrt(252)
+
+    )
+
+
+
 
 
     # ========================================================
-    # TREND SIGNALS
+    # TREND SIGNAL ENGINE
     # ========================================================
 
-    trend_7 = prices.iloc[-1] / prices.iloc[-7] - 1
-    trend_30 = prices.iloc[-1] / prices.iloc[-30] - 1
-    trend_90 = prices.iloc[-1] / prices.iloc[-90] - 1
-    trend_180 = prices.iloc[-1] / prices.iloc[-180] - 1
+
+    def safe_trend(window):
+
+
+        if len(prices) <= window:
+
+            return 0
+
+
+
+        return (
+
+            prices.iloc[-1]
+
+            /
+
+            prices.iloc[-window]
+
+            -
+
+            1
+
+        )
+
+
+
+
+    trend_7 = safe_trend(7)
+
+    trend_30 = safe_trend(30)
+
+    trend_90 = safe_trend(90)
+
+    trend_180 = safe_trend(180)
+
+
+
 
 
     technical_signal = (
-        trend_7 * 0.10 +
-        trend_30 * 0.30 +
-        trend_90 * 0.40 +
+
+        trend_7 * 0.10
+
+        +
+
+        trend_30 * 0.30
+
+        +
+
+        trend_90 * 0.40
+
+        +
+
         trend_180 * 0.20
+
     )
+
 
 
     technical_signal = np.clip(
+
         technical_signal,
+
         -0.20,
+
         0.20
+
     )
+
+
+
 
 
     # ========================================================
     # VOLATILITY REGIME
     # ========================================================
 
+
     recent_vol = float(
-        returns.tail(30).std()
+
+        returns
+
+        .tail(30)
+
+        .std()
+
     )
 
 
-    volatility_ratio = recent_vol / daily_vol
+
+    volatility_ratio = (
+
+        recent_vol
+
+        /
+
+        daily_vol
+
+    )
+
 
 
     volatility_ratio = np.clip(
+
         volatility_ratio,
+
         0.5,
+
         3
+
     )
+
+
+
 
 
     # ========================================================
     # ADAPTIVE WEIGHTS
+    #
+    # ISOLATED FROM MEMORY SYSTEM
     # ========================================================
 
-    # calm market = technical signals stronger
-    # volatile market = macro factors stronger
 
-    technical_weight = 0.45 / volatility_ratio
+    technical_weight = (
 
-    macro_weight = 0.15 * volatility_ratio
+        0.45
 
-    global_weight = 0.15 * volatility_ratio
+        /
+
+        volatility_ratio
+
+    )
+
+
+    macro_weight = (
+
+        0.15
+
+        *
+
+        volatility_ratio
+
+    )
+
+
+    global_weight = (
+
+        0.15
+
+        *
+
+        volatility_ratio
+
+    )
+
 
     sector_weight = 0.15
+
 
     sentiment_weight = 0.10
 
 
-    total = (
-        technical_weight +
-        macro_weight +
-        global_weight +
-        sector_weight +
+
+
+    total_weight = (
+
+        technical_weight
+
+        +
+
+        macro_weight
+
+        +
+
+        global_weight
+
+        +
+
+        sector_weight
+
+        +
+
         sentiment_weight
+
     )
 
 
-    technical_weight /= total
-    macro_weight /= total
-    global_weight /= total
-    sector_weight /= total
-    sentiment_weight /= total
+
+    technical_weight /= total_weight
+
+    macro_weight /= total_weight
+
+    global_weight /= total_weight
+
+    sector_weight /= total_weight
+
+    sentiment_weight /= total_weight
+
+
 
 
 
@@ -679,30 +1485,36 @@ def quantum_forecast(
     # EXTERNAL SIGNALS
     # ========================================================
 
+
     macro = external_features.get(
         "macro_score",
         0
     )
+
 
     sector = external_features.get(
         "sector_score",
         0
     )
 
+
     sentiment = external_features.get(
         "sentiment_score",
         0
     )
+
 
     global_market = external_features.get(
         "global_market_score",
         0
     )
 
+
     earnings = external_features.get(
         "earnings_score",
         0
     )
+
 
     rates = external_features.get(
         "rate_score",
@@ -710,7 +1522,10 @@ def quantum_forecast(
     )
 
 
+
     macro += rates * 0.25
+
+
 
 
 
@@ -718,600 +1533,1116 @@ def quantum_forecast(
     # MARKET STATE
     # ========================================================
 
+
     market_state = (
 
-        technical_signal * technical_weight +
+        technical_signal
+        *
+        technical_weight
 
-        macro * macro_weight +
+        +
 
-        global_market * global_weight +
+        macro
+        *
+        macro_weight
 
-        sector * sector_weight +
+        +
 
-        sentiment * sentiment_weight +
+        global_market
+        *
+        global_weight
 
-        earnings * 0.10
+        +
+
+        sector
+        *
+        sector_weight
+
+        +
+
+        sentiment
+        *
+        sentiment_weight
+
+        +
+
+        earnings
+        *
+        0.10
 
     )
+
 
 
     market_state = np.clip(
+
         market_state,
+
         -0.35,
+
         0.35
+
     )
 
 
 
+
+
     # ========================================================
-    # REALISTIC DRIFT MODEL
+    # DRIFT MODEL
     # ========================================================
+
 
     historical_return = float(
+
         returns.mean()
+
     )
 
 
-    # reduce overreaction to bad periods
 
     drift = (
 
-        historical_return * 0.35 +
+        historical_return * 0.60
 
-        market_state * 0.25 +
+        +
 
-        (historical_return * 0.40)
+        market_state * 0.40
 
     )
 
 
-    # stocks usually do not have massive expected
-    # daily movement without extreme conditions
 
     drift = np.clip(
+
         drift,
+
         -0.0015,
+
         0.0015
+
     )
 
 
 
-    # ========================================================
-    # EXPECTED RETURN
-    # ========================================================
+
 
     expected_return = drift * days
 
 
-    # realistic long horizon limits
 
-    max_moves = {
 
-        7:0.10,
 
-        30:0.18,
+    allowed_moves = {
 
-        60:0.25,
 
-        90:0.35
+        1: 0.03,
+
+        2: 0.05,
+
+        7: 0.10,
+
+        30: 0.18,
+
+        60: 0.25,
+
+        90: 0.35
 
     }
 
 
-    allowed_move = max_moves.get(
+
+    allowed_move = allowed_moves.get(
+
         days,
+
         0.35
+
     )
+
 
 
     expected_return = np.clip(
+
         expected_return,
+
         -allowed_move,
+
         allowed_move
+
     )
+
+
+
 
 
     expected_price = (
-        S0 *
-        np.exp(expected_return)
+
+        S0
+
+        *
+
+        np.exp(
+
+            expected_return
+
+        )
+
     )
 
 
 
+
+
     # ========================================================
-    # PRICE STATE GRID
+    # QUANTUM PRICE STATES
     # ========================================================
+
 
     states = 2 ** qubits
 
 
-    volatility_range = (
 
-        S0 *
-        annual_vol *
-        np.sqrt(days/252) *
+    price_range = (
+
+        S0
+
+        *
+
+        annual_vol
+
+        *
+
+        np.sqrt(
+
+            max(days,1)
+
+            /
+
+            252
+
+        )
+
+        *
+
         1.5
 
     )
 
 
-    volatility_range = np.clip(
-        volatility_range,
-        S0*0.04,
-        S0*allowed_move
+
+    price_range = np.clip(
+
+        price_range,
+
+        S0 * 0.02,
+
+        S0 * allowed_move
+
     )
 
 
-    lower_bound = max(
+
+    lower = max(
+
         S0*(1-allowed_move),
-        expected_price-volatility_range
+
+        expected_price-price_range
+
     )
 
 
-    upper_bound = min(
+
+    upper = min(
+
         S0*(1+allowed_move),
-        expected_price+volatility_range
+
+        expected_price+price_range
+
     )
 
 
-    price_grid=np.linspace(
-        lower_bound,
-        upper_bound,
+
+    price_grid = np.linspace(
+
+        lower,
+
+        upper,
+
         states
+
     )
 
 
-    return_grid=(
 
-        (price_grid-S0)
+    return_grid = (
+
+        (
+
+            price_grid
+
+            -
+
+            S0
+
+        )
+
         /
+
         S0
 
-    )*100
+    ) * 100
     # ============================================================
-# PROBABILITY DISTRIBUTION
+# APP.PY PART 5/6
+# PROBABILITY ENGINE + RESULTS
 # ============================================================
 
+
+
+    # ========================================================
+    # CLASSICAL PROBABILITY DISTRIBUTION
+    # ========================================================
+
+
     target_return = (
-        expected_price / S0 - 1
+
+        expected_price
+
+        /
+
+        S0
+
+        -
+
+        1
+
     )
+
 
 
     uncertainty = (
-        annual_vol *
-        np.sqrt(days / 252)
+
+        annual_vol
+
+        *
+
+        np.sqrt(
+
+            max(days,1)
+
+            /
+
+            252
+
+        )
+
     )
+
 
 
     uncertainty = np.clip(
+
         uncertainty,
-        0.04,
+
+        0.02,
+
         allowed_move
+
     )
 
 
-    z = (
-        (return_grid / 100 - target_return)
+
+    z_score = (
+
+        (
+
+            return_grid / 100
+
+            -
+
+            target_return
+
+        )
+
         /
+
         uncertainty
+
     )
+
 
 
     classical_probability = np.exp(
-        -0.5 * z**2
+
+        -0.5 *
+
+        z_score ** 2
+
     )
 
 
 
+
+
     # ========================================================
-    # MARKET CONFIDENCE ADJUSTMENT
+    # FACTOR ALIGNMENT
     # ========================================================
+
 
     factor_alignment = np.mean(
+
         [
+
             abs(technical_signal),
+
             abs(macro),
+
             abs(global_market),
+
             abs(sector),
+
             abs(sentiment)
+
         ]
+
     )
+
 
 
     factor_alignment = np.clip(
+
         factor_alignment,
+
         0,
+
         1
+
     )
+
 
 
     classical_probability *= (
-        0.85 +
+
+        0.85
+
+        +
+
         factor_alignment * 0.15
+
     )
+
+
+
 
 
     classical_probability = np.nan_to_num(
-        classical_probability
+
+        classical_probability,
+
+        nan=1.0
+
     )
 
 
-    if classical_probability.sum() <= 0:
+
+    probability_sum = classical_probability.sum()
+
+
+
+    if probability_sum <= 0:
+
 
         classical_probability = np.ones(
+
             states
+
         )
 
 
-    classical_probability /= (
-        classical_probability.sum()
-    )
+        probability_sum = states
 
 
 
-# ============================================================
-# QUANTUM SAMPLING
-# ============================================================
+    classical_probability /= probability_sum
+
+
+
+
+
+    # ========================================================
+    # QUANTUM SAMPLING
+    # ========================================================
+
 
     quantum_probability = None
 
 
+
     try:
 
+
         circuit = QuantumCircuit(
+
             qubits
+
         )
+
 
 
         amplitudes = np.sqrt(
+
             classical_probability
+
         )
+
+
+
+        amplitudes /= np.linalg.norm(
+
+            amplitudes
+
+        )
+
 
 
         circuit.initialize(
+
             amplitudes,
+
             range(qubits)
+
         )
+
 
 
         circuit.measure_all()
 
 
+
         simulator = AerSimulator(
+
             method="matrix_product_state"
+
         )
 
 
+
         result = simulator.run(
+
             circuit,
+
             shots=shots
+
         ).result()
+
 
 
         counts = result.get_counts()
 
 
+
         quantum_probability = np.zeros(
+
             states
+
         )
+
 
 
         for state, count in counts.items():
 
+
             index = int(
+
                 state,
+
                 2
+
             )
+
 
             if index < states:
 
+
                 quantum_probability[index] = (
-                    count / shots
+
+                    count
+
+                    /
+
+                    shots
+
                 )
 
 
+
+
+
     except Exception:
+
 
         quantum_probability = None
 
 
 
-# ============================================================
-# QUANTUM FALLBACK
-# ============================================================
+
+
+    # ========================================================
+    # SAFE FALLBACK
+    # ========================================================
+
 
     if (
+
         quantum_probability is None
+
         or
+
         quantum_probability.sum() <= 0
+
     ):
 
+
         quantum_probability = (
+
             classical_probability.copy()
+
         )
+
 
     else:
 
+
         quantum_probability /= (
+
             quantum_probability.sum()
+
         )
 
 
 
-# ============================================================
-# EXPECTED VALUE
-# ============================================================
+
+
+    # ========================================================
+    # EXPECTED PRICE
+    # ========================================================
+
 
     quantum_expected_price = np.sum(
-        price_grid *
+
+        price_grid
+
+        *
+
         quantum_probability
+
     )
 
 
 
-# ============================================================
-# SCENARIO PROBABILITIES
-# ============================================================
-
-    upside_probability = np.sum(
-        quantum_probability[
-            return_grid > 5
-        ]
-    ) * 100
 
 
-    downside_probability = np.sum(
-        quantum_probability[
-            return_grid < -5
-        ]
-    ) * 100
+    # ========================================================
+    # SCENARIO PROBABILITIES
+    # ========================================================
+
+
+    upside_probability = (
+
+        np.sum(
+
+            quantum_probability[
+
+                return_grid > 5
+
+            ]
+
+        )
+
+        *
+
+        100
+
+    )
+
+
+
+    downside_probability = (
+
+        np.sum(
+
+            quantum_probability[
+
+                return_grid < -5
+
+            ]
+
+        )
+
+        *
+
+        100
+
+    )
 
 
 
     neutral_probability = (
+
         100
+
         -
+
         upside_probability
+
         -
+
         downside_probability
+
     )
 
 
-    # keep scenarios realistic
 
     upside_probability = np.clip(
+
         upside_probability,
+
         0,
+
         95
+
     )
+
 
 
     downside_probability = np.clip(
+
         downside_probability,
+
         0,
+
         95
+
     )
+
 
 
     neutral_probability = np.clip(
+
         neutral_probability,
+
         5,
+
         95
+
     )
 
 
 
-# ============================================================
-# CONFIDENCE SCORE
-# ============================================================
+
+
+    # ========================================================
+    # CONFIDENCE MODEL
+    # ========================================================
+
 
     entropy = -np.sum(
-        quantum_probability *
+
+        quantum_probability
+
+        *
+
         np.log(
+
             quantum_probability + 1e-12
+
         )
+
     )
+
 
 
     entropy_score = (
-        1 -
-        entropy / np.log(states)
+
+        1
+
+        -
+
+        entropy /
+
+        np.log(states)
+
     ) * 100
 
 
+
     volatility_score = (
-        100 -
+
+        100
+
+        -
+
         annual_vol * 100
+
     )
+
 
 
     volatility_score = np.clip(
+
         volatility_score,
+
         10,
+
         90
+
     )
+
 
 
     confidence_score = (
 
-        entropy_score * 0.50 +
+        entropy_score * 0.50
 
-        volatility_score * 0.30 +
+        +
+
+        volatility_score * 0.30
+
+        +
 
         factor_alignment * 100 * 0.20
 
     )
 
 
+
     confidence_score = np.clip(
+
         confidence_score,
+
         10,
+
         95
+
     )
 
 
 
-# ============================================================
-# MARKET REGIME
-# ============================================================
+
+
+    # ========================================================
+    # MARKET REGIME
+    # ========================================================
+
 
     if market_state > 0.08:
 
+
         regime = "Bullish"
+
+
 
     elif market_state < -0.08:
 
+
         regime = "Bearish"
 
+
+
     else:
+
 
         regime = "Neutral"
 
 
 
-# ============================================================
-# RISK SCORE
-# ============================================================
+
+
+    # ========================================================
+    # RISK SCORE
+    # ========================================================
+
 
     risk_score = (
 
-        annual_vol * 100 *
+        annual_vol * 100
 
-        (downside_probability / 100)
+        *
+
+        (
+
+            downside_probability
+
+            /
+
+            100
+
+        )
 
     )
 
 
-# ============================================================
-# RETURN RESULTS
-# ============================================================
+
+
+
+    # ========================================================
+    # RETURN MODEL OUTPUT
+    # ========================================================
+
 
     return {
 
-        "starting_price": S0,
 
-        "price_grid": price_grid,
+        "starting_price":
 
-        "return_grid": return_grid,
+            S0,
 
-        "probability": quantum_probability,
 
-        "expected_price": quantum_expected_price,
+        "price_grid":
 
-        "volatility": annual_vol * 100,
+            price_grid,
 
-        "returns": returns,
 
-        "market_regime": regime,
+        "return_grid":
 
-        "confidence_score": confidence_score,
+            return_grid,
 
-        "market_state": market_state,
 
-        "risk_score": risk_score,
+        "probability":
 
-        "upside_probability": upside_probability,
+            quantum_probability,
 
-        "downside_probability": downside_probability,
 
-        "neutral_probability": neutral_probability,
+        "expected_price":
 
-        "adaptive_weights": {
+            quantum_expected_price,
 
-            "technical": technical_weight,
 
-            "macro": macro_weight,
+        "volatility":
 
-            "global": global_weight,
+            annual_vol * 100,
 
-            "sector": sector_weight,
 
-            "sentiment": sentiment_weight
+        "returns":
+
+            returns,
+
+
+        "market_regime":
+
+            regime,
+
+
+        "confidence_score":
+
+            confidence_score,
+
+
+        "market_state":
+
+            market_state,
+
+
+        "risk_score":
+
+            risk_score,
+
+
+        "upside_probability":
+
+            upside_probability,
+
+
+        "downside_probability":
+
+            downside_probability,
+
+
+        "neutral_probability":
+
+            neutral_probability,
+
+
+        # kept internally only
+        # never displayed unless requested
+
+        "model_metadata": {
+
+
+            "technical_signal":
+
+                technical_signal,
+
+
+            "market_state":
+
+                market_state
+
 
         }
 
+
     }
-    # ============================================================
-# RUN FORECAST
+
+
+
+
+
+# ============================================================
+# FORECAST EXECUTION
 # ============================================================
 
+
 settings = [
+
     ticker,
+
     forecast_days,
+
     qubits,
+
     shots
+
 ]
+
 
 
 if run_button:
 
+
     run_price = (
+
         float(current_price)
+
         if current_price
-        else float(market_data["Close"].iloc[-1])
+
+        else
+
+        float(
+
+            market_data["Close"].iloc[-1]
+
+        )
+
     )
+
 
 
     try:
 
+
         with st.spinner(
-            "Running adaptive quantum probability simulation..."
+
+            "Running quantum probability simulation..."
+
         ):
 
+
             result = quantum_forecast(
+
                 market_data,
+
                 run_price,
+
                 forecast_days,
+
                 qubits,
+
                 shots,
+
                 external_features
+
             )
 
 
+
         st.session_state.forecast = result
+
+
         st.session_state.forecast_settings = settings
-        st.session_state.last_run = datetime.datetime.now().strftime(
-            "%H:%M:%S"
+
+
+        st.session_state.last_run = (
+
+            datetime.datetime.now()
+
+            .strftime("%H:%M:%S")
+
         )
 
+
         st.session_state.last_price = run_price
-        st.session_state.risk_score = result["risk_score"]
-        st.session_state.confidence_score = result["confidence_score"]
-        st.session_state.market_regime = result["market_regime"]
+
+
+        st.session_state.risk_score = (
+
+            result["risk_score"]
+
+        )
+
+
+        st.session_state.confidence_score = (
+
+            result["confidence_score"]
+
+        )
+
+
+        st.session_state.market_regime = (
+
+            result["market_regime"]
+
+        )
 
 
         st.success(
+
             "Quantum analysis completed."
+
         )
+
 
 
     except Exception as error:
 
+
         st.error(
+
             f"Forecast failed: {error}"
+
         )
 
-        st.stop()
 
+        st.stop()
+    # ============================================================
+# APP.PY PART 6/6
+# DASHBOARD + EXPORT + PREDICTION MEMORY
+# ============================================================
 
 
 # ============================================================
 # VALIDATION
 # ============================================================
 
+
 if st.session_state.forecast is None:
+
 
     st.info(
         "Select settings and run a forecast."
     )
 
+
     st.stop()
+
 
 
 forecast = st.session_state.forecast
 
 
+
 if st.session_state.forecast_settings != settings:
+
 
     st.warning(
         "Settings changed. Run forecast again."
@@ -1319,109 +2650,244 @@ if st.session_state.forecast_settings != settings:
 
 
 
+
+
+# ============================================================
+# PREDICTION MEMORY RECORDING
+# ============================================================
+
+
+def save_prediction_record(
+    ticker,
+    forecast,
+    horizon
+):
+
+
+    """
+    Stores forecast for future residual analysis.
+
+    This does not affect current predictions.
+
+    It is only used to measure:
+    predicted vs actual error.
+    """
+
+
+    try:
+
+
+        from prediction_memory import save_prediction
+
+
+
+        save_prediction(
+
+            ticker,
+
+            horizon,
+
+            forecast["starting_price"],
+
+            forecast["expected_price"]
+
+        )
+
+
+
+    except Exception:
+
+
+        pass
+
+
+
+
+
+save_prediction_record(
+
+    ticker,
+
+    forecast,
+
+    forecast_days
+
+)
+
+
+
+
+
 # ============================================================
 # DASHBOARD
 # ============================================================
 
+
 st.divider()
+
 
 st.subheader(
     "⚛️ Quantum Probability Dashboard"
 )
 
 
+
 expected_price = forecast["expected_price"]
+
 
 
 price_change = (
 
     (
-        expected_price -
+
+        expected_price
+
+        -
+
         forecast["starting_price"]
+
     )
+
     /
+
     forecast["starting_price"]
 
 ) * 100
 
 
 
+
+
 c1,c2,c3,c4 = st.columns(4)
+
 
 
 with c1:
 
+
     st.markdown(
+
         f"""
+
         <div class="metric-box">
+
         <h4>Current Price</h4>
+
         <h2>
-        {format_price(forecast["starting_price"])}
+
+        {format_price(
+            forecast["starting_price"]
+        )}
+
         </h2>
+
         </div>
+
         """,
+
         unsafe_allow_html=True
+
     )
+
+
+
 
 
 with c2:
 
+
     cls = (
+
         "positive"
+
         if price_change >= 0
-        else "negative"
+
+        else
+
+        "negative"
+
     )
 
+
+
     st.markdown(
+
         f"""
+
         <div class="metric-box">
+
         <h4>Expected Price</h4>
+
         <h2>
+
         {format_price(expected_price)}
+
         </h2>
+
+
         <p class="{cls}">
+
         {price_change:+.2f}%
+
         </p>
+
         </div>
+
         """,
+
         unsafe_allow_html=True
+
     )
+
+
+
 
 
 with c3:
 
-    st.markdown(
-        f"""
-        <div class="metric-box">
-        <h4>Upside Probability</h4>
-        <h2>
-        {forecast["upside_probability"]:.1f}%
-        </h2>
-        <p>
-        Probability above +5%
-        </p>
-        </div>
-        """,
-        unsafe_allow_html=True
+
+    st.metric(
+
+        "Upside Probability",
+
+        f"{forecast['upside_probability']:.1f}%"
+
     )
+
+
+
 
 
 with c4:
 
-    st.markdown(
-        f"""
-        <div class="metric-box">
-        <h4>Confidence</h4>
-        <h2>
-        {forecast["confidence_score"]:.1f}%
-        </h2>
-        <p>
-        {forecast["market_regime"]}
-        </p>
-        </div>
-        """,
-        unsafe_allow_html=True
+
+    st.metric(
+
+        "Confidence",
+
+        f"{forecast['confidence_score']:.1f}%"
+
     )
+
+
+
+st.caption(
+
+    f"""
+
+    Regime: {forecast['market_regime']}
+
+    |
+
+    Last Simulation:
+
+    {st.session_state.last_run}
+
+    """
+
+)
+
+
 
 
 
@@ -1429,34 +2895,50 @@ with c4:
 # SCENARIOS
 # ============================================================
 
+
 st.divider()
+
 
 
 s1,s2,s3 = st.columns(3)
 
 
+
 with s1:
 
     st.metric(
+
         "Bull Scenario",
-        f'{forecast["upside_probability"]:.1f}%'
+
+        f"{forecast['upside_probability']:.1f}%"
+
     )
+
 
 
 with s2:
 
     st.metric(
+
         "Neutral Scenario",
-        f'{forecast["neutral_probability"]:.1f}%'
+
+        f"{forecast['neutral_probability']:.1f}%"
+
     )
+
 
 
 with s3:
 
     st.metric(
+
         "Bear Scenario",
-        f'{forecast["downside_probability"]:.1f}%'
+
+        f"{forecast['downside_probability']:.1f}%"
+
     )
+
+
 
 
 
@@ -1464,47 +2946,84 @@ with s3:
 # ANALYTICS TABS
 # ============================================================
 
-tab1,tab2,tab3,tab4,tab5 = st.tabs(
+
+tab1,tab2,tab3,tab4 = st.tabs(
+
     [
+
         "Overview",
+
         "Forecast",
+
         "Risk",
-        "Quantum Model",
-        "Raw Data"
+
+        "Quantum"
+
     ]
+
 )
+
+
 
 
 
 with tab1:
 
+
     st.subheader(
+
         "Market Statistics"
+
     )
+
 
     returns = forecast["returns"]
 
+
+
     a,b,c,d = st.columns(4)
 
+
+
     a.metric(
+
         "Average Daily Return",
+
         f"{returns.mean()*100:.3f}%"
+
     )
+
+
 
     b.metric(
+
         "Daily Volatility",
+
         f"{returns.std()*100:.3f}%"
+
     )
+
+
 
     c.metric(
+
         "Best Day",
+
         f"{returns.max()*100:.2f}%"
+
     )
 
+
+
     d.metric(
+
         "Worst Day",
+
         f"{returns.min()*100:.2f}%"
+
     )
+
+
 
 
 
@@ -1512,65 +3031,110 @@ with tab1:
 
 with tab2:
 
+
     fig,ax = plt.subplots(
+
         figsize=(10,4)
+
     )
+
 
     ax.plot(
+
         forecast["return_grid"],
+
         forecast["probability"]
+
     )
+
 
     ax.set_xlabel(
+
         "Return (%)"
+
     )
+
 
     ax.set_ylabel(
+
         "Probability"
+
     )
+
 
     ax.set_title(
+
         "Quantum Probability Distribution"
+
     )
 
-    ax.grid(alpha=0.3)
+
+    ax.grid(
+
+        alpha=0.3
+
+    )
+
 
     st.pyplot(
+
         fig,
+
         width="stretch"
+
     )
+
 
     plt.close(fig)
 
 
 
+
+
+
+
 with tab3:
 
-    st.metric(
-        "Risk Score",
-        f'{forecast["risk_score"]:.2f}'
-    )
 
     st.metric(
-        "Annual Volatility",
-        f'{forecast["volatility"]:.2f}%'
+
+        "Risk Score",
+
+        f"{forecast['risk_score']:.2f}"
+
     )
+
+
+
+    st.metric(
+
+        "Annual Volatility",
+
+        f"{forecast['volatility']:.2f}%"
+
+    )
+
+
+
+
 
 
 
 with tab4:
 
+
     st.write(
+
 """
-Historical Data
+Historical Market Data
 
 ↓
 
-Adaptive Factor Weighting
+Feature Extraction
 
 ↓
 
-Probability Distribution
+Adaptive Probability Model
 
 ↓
 
@@ -1582,43 +3146,40 @@ Qiskit Aer MPS Sampling
 
 ↓
 
-Probability Weighted Forecast
+Probability Forecast
 """
+
     )
 
 
+
     st.metric(
+
         "Quantum States",
+
         2 ** qubits
+
     )
 
+
     st.metric(
+
         "Qubits",
+
         qubits
+
     )
+
 
     st.metric(
+
         "Shots",
+
         shots
+
     )
 
 
-
-with tab5:
-
-    table = pd.DataFrame(
-        {
-            "Price":forecast["price_grid"],
-            "Return %":forecast["return_grid"],
-            "Probability %":forecast["probability"]*100
-        }
-    )
-
-
-    st.dataframe(
-        table,
-        width="stretch"
-    )
 
 
 
@@ -1626,25 +3187,51 @@ with tab5:
 # EXPORT
 # ============================================================
 
+
 st.divider()
 
 
+
 export = pd.DataFrame(
+
     {
-        "Future Price":forecast["price_grid"],
-        "Return %":forecast["return_grid"],
-        "Probability":forecast["probability"]
+
+        "Future Price":
+
+            forecast["price_grid"],
+
+
+        "Return %":
+
+            forecast["return_grid"],
+
+
+        "Probability":
+
+            forecast["probability"]
+
     }
+
 )
+
+
 
 
 st.download_button(
-    "Download Quantum Forecast CSV",
+
+    "Download Forecast CSV",
+
     export.to_csv(index=False),
-    file_name=f"{ticker}_quantum_forecast.csv",
+
+    file_name=f"{ticker}_forecast.csv",
+
     mime="text/csv",
+
     width="stretch"
+
 )
+
+
 
 
 
@@ -1652,21 +3239,32 @@ st.download_button(
 # FOOTER
 # ============================================================
 
+
 st.divider()
 
 
+
 st.caption(
+
 f"""
+
 ⚛️ Quantum Equity Research Terminal
+
 
 Ticker: {ticker}
 
+
 Quantum States: {2 ** qubits}
+
 
 Qubits: {qubits}
 
+
 Last Simulation: {st.session_state.last_run}
 
+
 Probability model only. Not financial advice.
+
 """
+
 )
