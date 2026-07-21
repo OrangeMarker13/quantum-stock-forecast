@@ -1,9 +1,7 @@
-streamlit
-numpy
-pandas
-yfinance
-matplotlib
-qiskit
-qiskit-aer
-qiskit-optimization
-qiskit-aer[mps]
+streamlit==1.59.2
+numpy==2.2.6
+pandas==2.2.3
+yfinance==0.2.54
+matplotlib==3.10.1
+qiskit==2.1.2
+qiskit-aer==0.16.4
