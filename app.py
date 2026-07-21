@@ -1423,5 +1423,4 @@ Forecast outputs are statistical estimates and are not financial advice.
 
 st.divider()
 
-
-    return data
+return data
