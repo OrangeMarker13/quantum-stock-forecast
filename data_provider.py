@@ -1,91 +1,113 @@
+import os
+import time
 import requests
 import pandas as pd
+import numpy as np
 import streamlit as st
-import time
-
-from cache import save_cache, load_cache
 
 
 # ============================================================
-# API KEYS
+# SETTINGS
 # ============================================================
 
-ALPHA_VANTAGE_KEY = st.secrets.get(
-    "ALPHA_VANTAGE_KEY",
-    ""
-)
+DATA_FOLDER = "data"
 
-TWELVE_DATA_KEY = st.secrets.get(
-    "TWELVE_DATA_KEY",
-    ""
-)
+CACHE_DAYS = 1
 
-FMP_KEY = st.secrets.get(
-    "FMP_KEY",
-    ""
+os.makedirs(
+    DATA_FOLDER,
+    exist_ok=True
 )
 
 
-
 # ============================================================
-# ALPHA VANTAGE
+# LOCAL STORAGE
 # ============================================================
 
-def get_alpha_vantage(ticker):
+def get_file_path(ticker):
 
-    if not ALPHA_VANTAGE_KEY:
-        return None
+    return os.path.join(
+        DATA_FOLDER,
+        f"{ticker}.csv"
+    )
 
+
+
+def save_data(
+    ticker,
+    data
+):
 
     try:
 
-        url = (
-            "https://www.alphavantage.co/query"
-            "?function=TIME_SERIES_DAILY"
-            f"&symbol={ticker}"
-            "&outputsize=full"
-            f"&apikey={ALPHA_VANTAGE_KEY}"
+        path = get_file_path(
+            ticker
+        )
+
+        data.to_csv(
+            path,
+            index=False
+        )
+
+        return True
+
+
+    except Exception:
+
+        return False
+
+
+
+def load_saved_data(
+    ticker
+):
+
+    try:
+
+        path = get_file_path(
+            ticker
         )
 
 
-        response = requests.get(
-            url,
-            timeout=10
-        )
-
-
-        data = response.json()
-
-
-        if "Time Series (Daily)" not in data:
+        if not os.path.exists(path):
 
             return None
 
 
 
-        prices = pd.DataFrame(
-            data["Time Series (Daily)"]
-        ).T
-
-
-
-        prices.index = pd.to_datetime(
-            prices.index
+        data = pd.read_csv(
+            path
         )
 
 
-        prices = prices.sort_index()
+        if "Close" not in data.columns:
+
+            return None
 
 
 
-        close = (
-            prices["4. close"]
-            .astype(float)
+        data["Close"] = (
+            pd.to_numeric(
+                data["Close"],
+                errors="coerce"
+            )
         )
 
 
-        return close
+        data = (
+            data
+            .dropna()
+            .reset_index(drop=True)
+        )
 
+
+        if len(data) < 20:
+
+            return None
+
+
+
+        return data
 
 
     except Exception:
@@ -94,200 +116,88 @@ def get_alpha_vantage(ticker):
 
 
 
-
 # ============================================================
-# TWELVE DATA
+# PROVIDER 1
+# STOOQ FREE MARKET DATA
 # ============================================================
 
-def get_twelve_data(ticker):
-
-    if not TWELVE_DATA_KEY:
-
-        return None
-
-
+def stooq_provider(
+    ticker
+):
 
     try:
 
-        url = (
-            "https://api.twelvedata.com/time_series"
-            f"?symbol={ticker}"
-            "&interval=1day"
-            "&outputsize=500"
-            f"&apikey={TWELVE_DATA_KEY}"
-        )
+        symbol = ticker.lower()
 
+        if "-" in symbol:
 
+            symbol = symbol.replace(
+                "-",
+                "."
+            )
 
-        response = requests.get(
-            url,
-            timeout=10
-        )
-
-
-
-        data = response.json()
-
-
-
-        if "values" not in data:
-
-            return None
-
-
-
-        df = pd.DataFrame(
-            data["values"]
-        )
-
-
-
-        df["datetime"] = pd.to_datetime(
-            df["datetime"]
-        )
-
-
-
-        df = df.sort_values(
-            "datetime"
-        )
-
-
-
-        close = (
-            df.set_index("datetime")["close"]
-            .astype(float)
-        )
-
-
-
-        return close
-
-
-
-    except Exception:
-
-        return None
-
-
-
-
-# ============================================================
-# FINANCIAL MODELING PREP
-# ============================================================
-
-def get_fmp(ticker):
-
-    if not FMP_KEY:
-
-        return None
-
-
-
-    try:
-
-        url = (
-            "https://financialmodelingprep.com/api/v3/"
-            f"historical-price-full/{ticker}"
-            f"?apikey={FMP_KEY}"
-        )
-
-
-
-        response = requests.get(
-            url,
-            timeout=10
-        )
-
-
-
-        data = response.json()
-
-
-
-        if "historical" not in data:
-
-            return None
-
-
-
-        df = pd.DataFrame(
-            data["historical"]
-        )
-
-
-
-        df["date"] = pd.to_datetime(
-            df["date"]
-        )
-
-
-
-        df = df.sort_values(
-            "date"
-        )
-
-
-
-        close = (
-            df.set_index("date")["close"]
-            .astype(float)
-        )
-
-
-
-        return close
-
-
-
-    except Exception:
-
-        return None
-
-
-
-
-# ============================================================
-# STOOQ BACKUP
-# ============================================================
-
-def get_stooq(ticker):
-
-    try:
 
         url = (
             "https://stooq.com/q/d/l/"
-            f"?s={ticker.lower()}&i=d"
+            f"?s={symbol}&d1=&d2="
         )
 
 
-
-        df = pd.read_csv(
-            url
+        response = requests.get(
+            url,
+            timeout=5
         )
 
 
-
-        if "Close" not in df.columns:
+        if response.status_code != 200:
 
             return None
 
 
 
-        df["Date"] = pd.to_datetime(
-            df["Date"]
+        from io import StringIO
+
+
+        data = pd.read_csv(
+            StringIO(
+                response.text
+            )
         )
 
 
+        if "Close" not in data.columns:
 
-        close = (
-            df.set_index("Date")["Close"]
-            .astype(float)
+            return None
+
+
+
+        data = data[
+            ["Close"]
+        ]
+
+
+        data["Close"] = (
+            pd.to_numeric(
+                data["Close"],
+                errors="coerce"
+            )
         )
 
 
+        data = (
+            data
+            .dropna()
+            .tail(500)
+        )
 
-        return close
+
+        if len(data) < 20:
+
+            return None
+
+
+
+        return data
 
 
 
@@ -297,12 +207,97 @@ def get_stooq(ticker):
 
 
 
+# ============================================================
+# PROVIDER 2
+# YAHOO BACKUP
+# ============================================================
+
+def yahoo_provider(
+    ticker
+):
+
+    try:
+
+        import yfinance as yf
+
+
+        data = yf.download(
+            ticker,
+            period="2y",
+            interval="1d",
+            progress=False,
+            auto_adjust=True
+        )
+
+
+        if data.empty:
+
+            return None
+
+
+
+        close = data["Close"]
+
+
+        if isinstance(
+            close,
+            pd.DataFrame
+        ):
+
+            close = close.iloc[:,0]
+
+
+
+        result = pd.DataFrame(
+            {
+                "Close": close
+            }
+        )
+
+
+        result["Close"] = (
+            pd.to_numeric(
+                result["Close"],
+                errors="coerce"
+            )
+        )
+
+
+        result = (
+            result
+            .dropna()
+            .reset_index(drop=True)
+        )
+
+
+        if len(result) < 20:
+
+            return None
+
+
+
+        return result
+
+
+
+    except Exception:
+
+        return None
+
+
 
 # ============================================================
-# MAIN DATA ROUTER
+# MAIN DATA ENGINE
 # ============================================================
 
-def get_stock_data(ticker):
+
+@st.cache_data(
+    ttl=3600,
+    max_entries=200
+)
+def get_stock_data(
+    ticker
+):
 
 
     ticker = (
@@ -313,136 +308,111 @@ def get_stock_data(ticker):
 
 
 
-    # --------------------------------------------------------
-    # CHECK CACHE FIRST
-    # --------------------------------------------------------
+    # Check local storage first
 
-    cached = load_cache(
+    stored = load_saved_data(
         ticker
     )
 
 
-    if cached is not None:
+    if stored is not None:
 
-
-        st.info(
-            f"Using cached data for {ticker}"
-        )
-
-
-        return cached
+        return stored["Close"]
 
 
 
-
-    # --------------------------------------------------------
-    # PROVIDER FALLBACK ORDER
-    # --------------------------------------------------------
+    # Provider order
 
     providers = [
 
-        (
-            "Alpha Vantage",
-            get_alpha_vantage
-        ),
+        stooq_provider,
 
-        (
-            "Twelve Data",
-            get_twelve_data
-        ),
-
-        (
-            "Financial Modeling Prep",
-            get_fmp
-        ),
-
-        (
-            "Stooq",
-            get_stooq
-        )
+        yahoo_provider
 
     ]
 
 
 
-
-    for name, provider in providers:
-
-
-        try:
-
-            prices = provider(
-                ticker
-            )
+    for provider in providers:
 
 
-        except Exception:
-
-            prices = None
-
-
-
-
-        if prices is not None:
-
-
-            prices = (
-                prices
-                .dropna()
-                .astype(float)
-            )
-
-
-
-            if len(prices) >= 20:
-
-
-                save_cache(
-                    ticker,
-                    prices
-                )
-
-
-
-                st.success(
-                    f"Data source: {name}"
-                )
-
-
-
-                return prices
-
-
-
-        time.sleep(1)
-
-
-
-
-    # --------------------------------------------------------
-    # OLD CACHE FALLBACK
-    # --------------------------------------------------------
-
-    old_cache = load_cache(
-        ticker,
-        max_age_minutes=1440
-    )
-
-
-
-    if old_cache is not None:
-
-
-        st.warning(
-            "Using older cached market data."
+        data = provider(
+            ticker
         )
 
 
-        return old_cache
+        if data is not None:
+
+
+            save_data(
+                ticker,
+                data
+            )
+
+
+            return data["Close"]
 
 
 
+        time.sleep(
+            0.5
+        )
 
-    raise ValueError(
-        f"No stock data found for {ticker}"
+
+
+    return pd.Series(
+        dtype=float
     )
+
+
+
+# ============================================================
+# LIVE PRICE
+# ============================================================
+
+
+@st.cache_data(
+    ttl=60,
+    max_entries=200
+)
+def get_live_price(
+    ticker
+):
+
+
+    try:
+
+
+        url = (
+            "https://query1.finance.yahoo.com/"
+            f"v8/finance/chart/{ticker}"
+        )
+
+
+        response = requests.get(
+            url,
+            timeout=5
+        )
+
+
+        data = response.json()
+
+
+
+        price = (
+            data
+            ["chart"]
+            ["result"][0]
+            ["meta"]
+            ["regularMarketPrice"]
+        )
+
+
+        return float(
+            price
+        )
+
+
+    except Exception:
+
+        return None
