@@ -2,7 +2,6 @@ import os
 import time
 import requests
 import pandas as pd
-import numpy as np
 import streamlit as st
 
 
@@ -12,16 +11,15 @@ import streamlit as st
 
 DATA_FOLDER = "data"
 
-CACHE_DAYS = 1
-
 os.makedirs(
     DATA_FOLDER,
     exist_ok=True
 )
 
 
+
 # ============================================================
-# LOCAL STORAGE
+# LOCAL CACHE
 # ============================================================
 
 def get_file_path(ticker):
@@ -40,17 +38,12 @@ def save_data(
 
     try:
 
-        path = get_file_path(
-            ticker
-        )
-
         data.to_csv(
-            path,
+            get_file_path(ticker),
             index=False
         )
 
         return True
-
 
     except Exception:
 
@@ -86,11 +79,9 @@ def load_saved_data(
 
 
 
-        data["Close"] = (
-            pd.to_numeric(
-                data["Close"],
-                errors="coerce"
-            )
+        data["Close"] = pd.to_numeric(
+            data["Close"],
+            errors="coerce"
         )
 
 
@@ -110,6 +101,7 @@ def load_saved_data(
         return data
 
 
+
     except Exception:
 
         return None
@@ -118,7 +110,7 @@ def load_saved_data(
 
 # ============================================================
 # PROVIDER 1
-# STOOQ FREE MARKET DATA
+# STOOQ
 # ============================================================
 
 def stooq_provider(
@@ -127,19 +119,19 @@ def stooq_provider(
 
     try:
 
-        symbol = ticker.lower()
-
-        if "-" in symbol:
-
-            symbol = symbol.replace(
+        symbol = (
+            ticker
+            .lower()
+            .replace(
                 "-",
                 "."
             )
+        )
 
 
         url = (
             "https://stooq.com/q/d/l/"
-            f"?s={symbol}&d1=&d2="
+            f"?s={symbol}&i=d"
         )
 
 
@@ -176,11 +168,9 @@ def stooq_provider(
         ]
 
 
-        data["Close"] = (
-            pd.to_numeric(
-                data["Close"],
-                errors="coerce"
-            )
+        data["Close"] = pd.to_numeric(
+            data["Close"],
+            errors="coerce"
         )
 
 
@@ -188,6 +178,7 @@ def stooq_provider(
             data
             .dropna()
             .tail(500)
+            .reset_index(drop=True)
         )
 
 
@@ -255,11 +246,9 @@ def yahoo_provider(
         )
 
 
-        result["Close"] = (
-            pd.to_numeric(
-                result["Close"],
-                errors="coerce"
-            )
+        result["Close"] = pd.to_numeric(
+            result["Close"],
+            errors="coerce"
         )
 
 
@@ -287,9 +276,8 @@ def yahoo_provider(
 
 
 # ============================================================
-# MAIN DATA ENGINE
+# MAIN MARKET DATA ENGINE
 # ============================================================
-
 
 @st.cache_data(
     ttl=3600,
@@ -299,7 +287,6 @@ def get_stock_data(
     ticker
 ):
 
-
     ticker = (
         ticker
         .upper()
@@ -307,21 +294,21 @@ def get_stock_data(
     )
 
 
+    # Check saved database first
 
-    # Check local storage first
-
-    stored = load_saved_data(
+    saved = load_saved_data(
         ticker
     )
 
 
-    if stored is not None:
+    if saved is not None:
 
-        return stored["Close"]
+        return (
+            saved["Close"]
+            .astype(float)
+        )
 
 
-
-    # Provider order
 
     providers = [
 
@@ -336,9 +323,17 @@ def get_stock_data(
     for provider in providers:
 
 
-        data = provider(
-            ticker
-        )
+        try:
+
+            data = provider(
+                ticker
+            )
+
+
+        except Exception:
+
+            data = None
+
 
 
         if data is not None:
@@ -350,7 +345,11 @@ def get_stock_data(
             )
 
 
-            return data["Close"]
+            return (
+                data["Close"]
+                .dropna()
+                .astype(float)
+            )
 
 
 
@@ -359,6 +358,8 @@ def get_stock_data(
         )
 
 
+
+    # Final failure protection
 
     return pd.Series(
         dtype=float
@@ -370,7 +371,6 @@ def get_stock_data(
 # LIVE PRICE
 # ============================================================
 
-
 @st.cache_data(
     ttl=60,
     max_entries=200
@@ -378,7 +378,6 @@ def get_stock_data(
 def get_live_price(
     ticker
 ):
-
 
     try:
 
@@ -395,12 +394,11 @@ def get_live_price(
         )
 
 
-        data = response.json()
-
+        result = response.json()
 
 
         price = (
-            data
+            result
             ["chart"]
             ["result"][0]
             ["meta"]
@@ -413,6 +411,30 @@ def get_live_price(
         )
 
 
+
     except Exception:
+
+
+        # fallback to stored data
+
+        try:
+
+            history = get_stock_data(
+                ticker
+            )
+
+
+            if not history.empty:
+
+                return float(
+                    history.iloc[-1]
+                )
+
+
+        except Exception:
+
+            pass
+
+
 
         return None
