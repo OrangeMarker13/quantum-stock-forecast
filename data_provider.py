@@ -3,6 +3,8 @@ import pandas as pd
 import streamlit as st
 import time
 
+from cache import save_cache, load_cache
+
 
 # ============================================================
 # API KEYS
@@ -39,9 +41,9 @@ def get_alpha_vantage(ticker):
 
         url = (
             "https://www.alphavantage.co/query"
-            f"?function=TIME_SERIES_DAILY"
+            "?function=TIME_SERIES_DAILY"
             f"&symbol={ticker}"
-            f"&outputsize=full"
+            "&outputsize=full"
             f"&apikey={ALPHA_VANTAGE_KEY}"
         )
 
@@ -56,12 +58,15 @@ def get_alpha_vantage(ticker):
 
 
         if "Time Series (Daily)" not in data:
+
             return None
+
 
 
         prices = pd.DataFrame(
             data["Time Series (Daily)"]
         ).T
+
 
 
         prices.index = pd.to_datetime(
@@ -70,6 +75,7 @@ def get_alpha_vantage(ticker):
 
 
         prices = prices.sort_index()
+
 
 
         close = (
@@ -81,9 +87,11 @@ def get_alpha_vantage(ticker):
         return close
 
 
+
     except Exception:
 
         return None
+
 
 
 
@@ -94,7 +102,9 @@ def get_alpha_vantage(ticker):
 def get_twelve_data(ticker):
 
     if not TWELVE_DATA_KEY:
+
         return None
+
 
 
     try:
@@ -108,16 +118,20 @@ def get_twelve_data(ticker):
         )
 
 
+
         response = requests.get(
             url,
             timeout=10
         )
 
 
+
         data = response.json()
 
 
+
         if "values" not in data:
+
             return None
 
 
@@ -127,9 +141,11 @@ def get_twelve_data(ticker):
         )
 
 
+
         df["datetime"] = pd.to_datetime(
             df["datetime"]
         )
+
 
 
         df = df.sort_values(
@@ -137,10 +153,12 @@ def get_twelve_data(ticker):
         )
 
 
+
         close = (
             df.set_index("datetime")["close"]
             .astype(float)
         )
+
 
 
         return close
@@ -150,6 +168,7 @@ def get_twelve_data(ticker):
     except Exception:
 
         return None
+
 
 
 
@@ -160,15 +179,19 @@ def get_twelve_data(ticker):
 def get_fmp(ticker):
 
     if not FMP_KEY:
+
         return None
+
 
 
     try:
 
         url = (
-            "https://financialmodelingprep.com/api/v3/historical-price-full/"
-            f"{ticker}?apikey={FMP_KEY}"
+            "https://financialmodelingprep.com/api/v3/"
+            f"historical-price-full/{ticker}"
+            f"?apikey={FMP_KEY}"
         )
+
 
 
         response = requests.get(
@@ -177,10 +200,13 @@ def get_fmp(ticker):
         )
 
 
+
         data = response.json()
 
 
+
         if "historical" not in data:
+
             return None
 
 
@@ -190,9 +216,11 @@ def get_fmp(ticker):
         )
 
 
+
         df["date"] = pd.to_datetime(
             df["date"]
         )
+
 
 
         df = df.sort_values(
@@ -200,9 +228,12 @@ def get_fmp(ticker):
         )
 
 
+
         close = (
             df.set_index("date")["close"]
+            .astype(float)
         )
+
 
 
         return close
@@ -212,6 +243,7 @@ def get_fmp(ticker):
     except Exception:
 
         return None
+
 
 
 
@@ -224,8 +256,10 @@ def get_stooq(ticker):
     try:
 
         url = (
-            f"https://stooq.com/q/d/l/?s={ticker.lower()}&i=d"
+            "https://stooq.com/q/d/l/"
+            f"?s={ticker.lower()}&i=d"
         )
+
 
 
         df = pd.read_csv(
@@ -233,7 +267,9 @@ def get_stooq(ticker):
         )
 
 
+
         if "Close" not in df.columns:
+
             return None
 
 
@@ -243,10 +279,12 @@ def get_stooq(ticker):
         )
 
 
+
         close = (
             df.set_index("Date")["Close"]
             .astype(float)
         )
+
 
 
         return close
@@ -259,6 +297,7 @@ def get_stooq(ticker):
 
 
 
+
 # ============================================================
 # MAIN DATA ROUTER
 # ============================================================
@@ -266,41 +305,141 @@ def get_stooq(ticker):
 def get_stock_data(ticker):
 
 
+    ticker = (
+        ticker
+        .upper()
+        .strip()
+    )
+
+
+
+    # --------------------------------------------------------
+    # CHECK CACHE FIRST
+    # --------------------------------------------------------
+
+    cached = load_cache(
+        ticker
+    )
+
+
+    if cached is not None:
+
+
+        st.info(
+            f"Using cached data for {ticker}"
+        )
+
+
+        return cached
+
+
+
+
+    # --------------------------------------------------------
+    # PROVIDER FALLBACK ORDER
+    # --------------------------------------------------------
+
     providers = [
 
-        ("Alpha Vantage", get_alpha_vantage),
+        (
+            "Alpha Vantage",
+            get_alpha_vantage
+        ),
 
-        ("Twelve Data", get_twelve_data),
+        (
+            "Twelve Data",
+            get_twelve_data
+        ),
 
-        ("Financial Modeling Prep", get_fmp),
+        (
+            "Financial Modeling Prep",
+            get_fmp
+        ),
 
-        ("Stooq", get_stooq)
+        (
+            "Stooq",
+            get_stooq
+        )
 
     ]
+
 
 
 
     for name, provider in providers:
 
 
-        prices = provider(
-            ticker
-        )
+        try:
+
+            prices = provider(
+                ticker
+            )
+
+
+        except Exception:
+
+            prices = None
+
+
 
 
         if prices is not None:
 
-            if len(prices) > 20:
+
+            prices = (
+                prices
+                .dropna()
+                .astype(float)
+            )
+
+
+
+            if len(prices) >= 20:
+
+
+                save_cache(
+                    ticker,
+                    prices
+                )
+
+
 
                 st.success(
                     f"Data source: {name}"
                 )
+
+
 
                 return prices
 
 
 
         time.sleep(1)
+
+
+
+
+    # --------------------------------------------------------
+    # OLD CACHE FALLBACK
+    # --------------------------------------------------------
+
+    old_cache = load_cache(
+        ticker,
+        max_age_minutes=1440
+    )
+
+
+
+    if old_cache is not None:
+
+
+        st.warning(
+            "Using older cached market data."
+        )
+
+
+        return old_cache
+
 
 
 
