@@ -51,7 +51,107 @@ st.set_page_config(
 
 )
 
+# ============================================================
+# LANDING PAGE
+# ============================================================
 
+if "started" not in st.session_state:
+    st.session_state.started = False
+
+
+if not st.session_state.started:
+
+    st.markdown(
+        """
+        <div style="
+            text-align:center;
+            padding:60px 20px;
+        ">
+
+        <h1 style="font-size:55px;">
+        ⚛️ Quantum Equity Research Terminal
+        </h1>
+
+        <h3>
+        Quantum-powered stock forecasting and risk analytics platform
+        </h3>
+
+        <p style="
+            font-size:20px;
+            color:#b8c1d1;
+        ">
+        Explore market probabilities using historical data,
+        statistical modeling, and quantum simulation.
+        </p>
+
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+    st.divider()
+
+
+    col1, col2, col3 = st.columns(3)
+
+
+    with col1:
+
+        st.markdown(
+            """
+            ### 📈 Market Intelligence
+
+            Analyze historical trends,
+            volatility, momentum,
+            and price behavior.
+            """
+        )
+
+
+    with col2:
+
+        st.markdown(
+            """
+            ### ⚛️ Quantum Simulation
+
+            Encode probability distributions
+            into quantum states using Qiskit.
+            """
+        )
+
+
+    with col3:
+
+        st.markdown(
+            """
+            ### 🛡 Risk Analytics
+
+            Measure upside,
+            downside,
+            confidence,
+            and uncertainty.
+            """
+        )
+
+
+    st.divider()
+
+
+    start = st.button(
+        "🚀 Start Quantum Simulation",
+        use_container_width=True
+    )
+
+
+    if start:
+
+        st.session_state.started = True
+
+        st.rerun()
+
+
+    st.stop()
 
 
 
