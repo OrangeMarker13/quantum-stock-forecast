@@ -423,33 +423,46 @@ h2, h3 {
 
 
 
-/* Positive numbers */
+/* Positive market movement */
 
 .positive {
 
-    color:
+    color: #22ff88;
 
-    #22c55e;
+    font-weight: 800;
 
-    font-weight:
-
-    bold;
+    text-shadow:
+    0 0 12px rgba(34,255,136,0.8);
 
 }
 
 
 
-/* Negative numbers */
+/* Negative market movement */
 
 .negative {
 
-    color:
+    color: #ff4444;
 
-    #ef4444;
+    font-weight: 800;
 
-    font-weight:
+    text-shadow:
+    0 0 12px rgba(255,68,68,0.8);
 
-    bold;
+}
+
+
+
+/* Quantum glow cards */
+
+.metric-box:hover {
+
+    transform: translateY(-5px);
+
+    box-shadow:
+    0 0 25px rgba(34,211,238,0.45);
+
+    transition: 0.3s ease;
 
 }
 
@@ -892,15 +905,22 @@ with header3:
 
         if daily_change >= 0:
 
-            change_display = f"🟢 +{daily_change:.2f}%"
+            change_display = (
+                f"<span class='positive'>"
+                f"🟢 +{daily_change:.2f}%"
+                f"</span>"
+            )
 
         else:
 
-            change_display = f"🔴 {daily_change:.2f}%"
+            change_display = (
+                f"<span class='negative'>"
+                f"🔴 {daily_change:.2f}%"
+                f"</span>"
+            )
+     else:
 
-    else:
-
-        change_display = "N/A"
+         change_display = "N/A"
 
 
     st.metric(
