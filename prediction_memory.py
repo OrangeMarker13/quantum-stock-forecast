@@ -439,3 +439,122 @@ def clean_memory(
             MEMORY_FILE,
             index=False
         )
+import os
+import json
+import datetime
+
+
+MEMORY_FILE = "prediction_memory.json"
+
+
+
+def load_memory():
+
+    if not os.path.exists(MEMORY_FILE):
+
+        return []
+
+    try:
+
+        with open(MEMORY_FILE,"r") as f:
+
+            return json.load(f)
+
+    except:
+
+        return []
+
+
+
+
+
+def save_memory(data):
+
+    with open(MEMORY_FILE,"w") as f:
+
+        json.dump(
+            data,
+            f,
+            indent=4
+        )
+
+
+
+
+
+def store_prediction(
+    ticker,
+    horizon,
+    current_price,
+    predicted_price
+):
+
+
+    memory = load_memory()
+
+
+    record = {
+
+        "ticker": ticker,
+
+        "horizon": horizon,
+
+        "date": str(
+            datetime.datetime.now()
+        ),
+
+        "current_price": current_price,
+
+        "predicted_price": predicted_price,
+
+        "actual_price": None,
+
+        "error": None
+
+    }
+
+
+    memory.append(record)
+
+
+    save_memory(memory)
+
+
+
+
+
+def evaluate_predictions():
+
+    memory = load_memory()
+
+
+    return memory
+
+
+
+
+
+def get_prediction_adjustment():
+
+    memory = load_memory()
+
+
+    errors = []
+
+
+    for item in memory:
+
+
+        if item.get("error") is not None:
+
+            errors.append(
+                item["error"]
+            )
+
+
+    if len(errors)==0:
+
+        return 0
+
+
+    return sum(errors)/len(errors)
