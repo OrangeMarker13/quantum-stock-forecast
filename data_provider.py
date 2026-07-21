@@ -1851,26 +1851,13 @@ def search_stocks(query):
 
 
 
-                results.append(
-
+                                results.append(
                     {
-                        "label":
-                        f"{name} ({symbol})",
-
-
-                        "symbol":
-                        symbol,
-
-
-                        "name":
-                        name,
-
-
-                        "priority":
-                        priority
-
+                        "label": f"{name} ({symbol})",
+                        "symbol": symbol,
+                        "name": name,
+                        "priority": priority
                     }
-
                 )
 
                     {
@@ -1891,7 +1878,13 @@ def search_stocks(query):
                 )
 
 
-        return results[:10]
+    results = sorted(
+        results,
+        key=lambda x: x["priority"],
+        reverse=True
+    )
+
+    return results[:10]
 
 
     except Exception as error:
