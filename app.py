@@ -1143,7 +1143,7 @@ def quantum_forecast(
 # ============================================================
 
 
-settings = (
+settings = [
 
     ticker,
 
@@ -1153,7 +1153,7 @@ settings = (
 
     shots
 
-)
+]
 
 
 
