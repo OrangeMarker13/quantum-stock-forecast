@@ -20,6 +20,8 @@ from data_provider import (
 
     get_company_info,
 
+    search_stocks,
+
     format_price,
 
     format_percent,
