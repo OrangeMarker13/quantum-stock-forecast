@@ -4735,123 +4735,53 @@ if run_button:
     # FINAL FORECAST OBJECT
     # ========================================================
 
-
     return {
+        "starting_price": S0,
 
+        "price_grid": price_grid,
 
-        "starting_price":
+        "return_grid": return_grid,
 
-            S0,
+        "probability": quantum_probability,
 
+        "expected_price": quantum_expected_price,
 
-        "price_grid":
+        "volatility": annual_vol * 100,
 
-            price_grid,
+        "returns": returns,
 
+        "market_regime": regime,
 
-        "return_grid":
+        "confidence_score": confidence_score,
 
-            return_grid,
+        "market_state": market_state,
 
+        "risk_score": risk_score,
 
-        "probability":
+        "upside_probability": upside_probability,
 
-            quantum_probability,
+        "downside_probability": downside_probability,
 
-
-        "expected_price":
-
-            quantum_expected_price,
-
-
-        "volatility":
-
-            annual_vol * 100,
-
-
-        "returns":
-
-            returns,
-
-
-        "market_regime":
-
-            regime,
-
-
-        "confidence_score":
-
-            confidence_score,
-
-
-        "market_state":
-
-            market_state,
-
-
-        "risk_score":
-
-            risk_score,
-
-
-        "upside_probability":
-
-            upside_probability,
-
-
-        "downside_probability":
-
-            downside_probability,
-
-
-        "neutral_probability":
-
-            neutral_probability,
-
+        "neutral_probability": neutral_probability,
 
         "model_metadata": {
 
+            "technical_signal": technical_signal,
 
-            "technical_signal":
+            "market_state": market_state,
 
-                technical_signal,
+            "technical_weight": technical_weight,
 
+            "macro_weight": macro_weight,
 
-            "market_state":
+            "global_weight": global_weight,
 
-                market_state,
+            "sector_weight": sector_weight,
 
-
-            "technical_weight":
-
-                technical_weight,
-
-
-            "macro_weight":
-
-                macro_weight,
-
-
-            "global_weight":
-
-                global_weight,
-
-
-            "sector_weight":
-
-                sector_weight,
-
-
-            "sentiment_weight":
-
-                sentiment_weight,
-
+            "sentiment_weight": sentiment_weight
 
         }
-
-
     }
-
 # ============================================================
 # FORECAST EXECUTION
 # ============================================================
