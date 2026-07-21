@@ -1,47 +1,32 @@
 import os
-import time
 import requests
 import pandas as pd
+import numpy as np
 
 
 DATA_FOLDER = "data"
 
 
 if not os.path.exists(DATA_FOLDER):
-
     os.makedirs(DATA_FOLDER)
 
 
 
 # ============================================================
-# SAVE LOCAL DATA
+# SAVE DATA
 # ============================================================
 
 
-def save_stock_data(
-    ticker,
-    prices
-):
+def save_stock_data(ticker, dataframe):
 
     try:
 
-        filepath = (
-            f"{DATA_FOLDER}/{ticker}.csv"
-        )
-
-
-        dataframe = pd.DataFrame(
-            {
-                "Close": prices
-            }
-        )
-
+        filepath = f"{DATA_FOLDER}/{ticker}.csv"
 
         dataframe.to_csv(
             filepath,
             index=False
         )
-
 
     except Exception as error:
 
@@ -53,26 +38,20 @@ def save_stock_data(
 
 
 # ============================================================
-# LOAD LOCAL DATA
+# LOAD SAVED DATA
 # ============================================================
 
 
-def load_saved_data(
-    ticker
-):
+def load_saved_data(ticker):
 
     try:
 
-        filepath = (
-            f"{DATA_FOLDER}/{ticker}.csv"
-        )
+        filepath = f"{DATA_FOLDER}/{ticker}.csv"
 
 
         if not os.path.exists(filepath):
 
-            return pd.Series(
-                dtype=float
-            )
+            return None
 
 
 
@@ -81,47 +60,176 @@ def load_saved_data(
         )
 
 
-        if "Close" not in data.columns:
-
-            return pd.Series(
-                dtype=float
-            )
-
-
-
-        prices = (
-            data["Close"]
-            .dropna()
-            .astype(float)
-        )
-
-
-        return prices
+        return data
 
 
 
     except Exception as error:
 
         print(
-            "Local data error:",
+            "Load error:",
             error
         )
 
 
-        return pd.Series(
-            dtype=float
+        return None
+
+
+
+# ============================================================
+# TECHNICAL INDICATORS
+# ============================================================
+
+
+def add_indicators(data):
+
+
+    data["Return"] = (
+
+        data["Close"]
+
+        .pct_change()
+
+    )
+
+
+
+    data["SMA20"] = (
+
+        data["Close"]
+
+        .rolling(20)
+
+        .mean()
+
+    )
+
+
+
+    data["SMA50"] = (
+
+        data["Close"]
+
+        .rolling(50)
+
+        .mean()
+
+    )
+
+
+
+    delta = data["Close"].diff()
+
+
+
+    gain = delta.clip(
+        lower=0
+    )
+
+
+
+    loss = -delta.clip(
+        upper=0
+    )
+
+
+
+    avg_gain = (
+
+        gain
+
+        .rolling(14)
+
+        .mean()
+
+    )
+
+
+
+    avg_loss = (
+
+        loss
+
+        .rolling(14)
+
+        .mean()
+
+    )
+
+
+
+    rs = avg_gain / avg_loss
+
+
+
+    data["RSI"] = (
+
+        100 -
+
+        (
+
+            100 /
+
+            (1 + rs)
+
+        )
+
+    )
+
+
+
+    data["Volatility"] = (
+
+        data["Return"]
+
+        .rolling(20)
+
+        .std()
+
+    )
+
+
+
+    data["Momentum"] = (
+
+        data["Close"]
+
+        /
+
+        data["Close"]
+
+        .shift(20)
+
+        -
+
+        1
+
+    )
+
+
+
+    if "Volume" in data.columns:
+
+        data["Volume_Change"] = (
+
+            data["Volume"]
+
+            .pct_change()
+
         )
 
 
 
+    return data
+
+
+
 # ============================================================
-# HISTORICAL MARKET DATA
+# YAHOO HISTORICAL DATA
 # ============================================================
 
 
-def get_stock_data(
-    ticker
-):
+def get_stock_data(ticker):
 
 
     url = (
@@ -144,6 +252,7 @@ def get_stock_data(
             headers={
 
                 "User-Agent":
+
                 "Mozilla/5.0"
 
             },
@@ -154,42 +263,16 @@ def get_stock_data(
 
 
 
-        if response.status_code != 200:
-
-
-            print(
-
-                "Yahoo status:",
-                response.status_code
-
-            )
-
-
-            saved = load_saved_data(
-                ticker
-            )
-
-
-            if not saved.empty:
-
-                return saved
-
-
-
-            return pd.Series(
-                dtype=float
-            )
-
-
-
-        json_data = response.json()
+        data = response.json()
 
 
 
         result = (
 
-            json_data
+            data
+
             .get("chart", {})
+
             .get("result")
 
         )
@@ -198,84 +281,73 @@ def get_stock_data(
 
         if not result:
 
-
-            print(
-                "No Yahoo chart result"
-            )
-
-
-            saved = load_saved_data(
-                ticker
-            )
-
+            saved = load_saved_data(ticker)
 
             return saved
 
 
 
+        result = result[0]
+
+
+
+        timestamps = result["timestamp"]
+
+
+
         quote = (
 
-            result[0]
+            result
+
             ["indicators"]
+
             ["quote"][0]
 
         )
 
 
 
-        closes = quote.get(
-            "close"
+        dataframe = pd.DataFrame(
+
+            {
+
+                "Date":
+
+                pd.to_datetime(
+
+                    timestamps,
+
+                    unit="s"
+
+                ),
+
+                "Close":
+
+                quote["close"],
+
+                "Volume":
+
+                quote["volume"]
+
+            }
+
         )
 
 
 
-        if closes is None:
+        dataframe = (
 
+            dataframe
 
-            print(
-                "No close prices"
-            )
-
-
-            saved = load_saved_data(
-                ticker
-            )
-
-
-            return saved
-
-
-
-        prices = pd.Series(
-            closes
-        )
-
-
-
-        prices = (
-
-            prices
             .dropna()
-            .astype(float)
 
         )
 
 
 
-        if len(prices) < 20:
-
-
-            print(
-                "Not enough Yahoo data"
-            )
-
-
-            saved = load_saved_data(
-                ticker
-            )
-
-
-            return saved
+        dataframe = add_indicators(
+            dataframe
+        )
 
 
 
@@ -283,25 +355,13 @@ def get_stock_data(
 
             ticker,
 
-            prices
+            dataframe
 
         )
 
 
 
-        print(
-
-            ticker,
-
-            "historical points:",
-
-            len(prices)
-
-        )
-
-
-
-        return prices
+        return dataframe
 
 
 
@@ -310,19 +370,16 @@ def get_stock_data(
 
         print(
 
-            "Historical data error:",
+            "Market data error:",
 
             error
 
         )
 
 
-        saved = load_saved_data(
+        return load_saved_data(
             ticker
         )
-
-
-        return saved
 
 
 
@@ -331,21 +388,19 @@ def get_stock_data(
 # ============================================================
 
 
-def get_live_price(
-    ticker
-):
-
-
-    url = (
-
-        f"https://query1.finance.yahoo.com/"
-        f"v8/finance/chart/{ticker}"
-
-    )
-
+def get_live_price(ticker):
 
 
     try:
+
+
+        url = (
+
+            f"https://query1.finance.yahoo.com/"
+            f"v8/finance/chart/{ticker}"
+
+        )
+
 
 
         response = requests.get(
@@ -355,6 +410,7 @@ def get_live_price(
             headers={
 
                 "User-Agent":
+
                 "Mozilla/5.0"
 
             },
@@ -372,31 +428,24 @@ def get_live_price(
         price = (
 
             data
+
             ["chart"]
+
             ["result"][0]
+
             ["meta"]
+
             ["regularMarketPrice"]
 
         )
 
 
 
-        return float(
-            price
-        )
+        return float(price)
 
 
 
-    except Exception as error:
-
-
-        print(
-
-            "Live price error:",
-
-            error
-
-        )
+    except Exception:
 
 
         return None
