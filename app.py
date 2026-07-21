@@ -494,7 +494,77 @@ button[aria-selected="true"] {
     2px solid #22d3ee;
 
 }
+/* Quantum action buttons */
 
+.stButton > button {
+
+    background: linear-gradient(
+        135deg,
+        #00ff88,
+        #00cc66
+    );
+
+    color: black;
+
+    font-weight: 700;
+
+    border-radius: 12px;
+
+    border: 1px solid #00ff88;
+
+    padding: 0.6rem 1.2rem;
+
+    transition: all 0.25s ease;
+
+}
+
+
+/* Hover effect */
+
+.stButton > button:hover {
+
+    transform: scale(1.05);
+
+    box-shadow:
+        0 0 18px #00ff88,
+        0 0 35px rgba(0,255,136,0.5);
+
+    background:
+        linear-gradient(
+            135deg,
+            #00ffaa,
+            #00ff88
+        );
+
+}
+
+
+/* Sidebar buttons */
+
+[data-testid="stSidebar"] .stButton > button {
+
+    background:
+        linear-gradient(
+            135deg,
+            #00ff88,
+            #00b85a
+        );
+
+}
+
+
+/* Warning/danger buttons later */
+
+.danger-button {
+
+    background:
+        linear-gradient(
+            135deg,
+            #ff4444,
+            #cc0000
+        );
+
+}
 
 </style>
 """,
