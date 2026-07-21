@@ -4736,99 +4736,61 @@ if run_button:
     # ========================================================
 
 
-    return {
+        return {
 
 
-        "starting_price":
+            "starting_price":
 
-            S0,
-
-
-
-        "price_grid":
-
-            price_grid,
+                S0,
 
 
 
-        "return_grid":
+            "price_grid":
 
-            return_grid,
-
-
-
-        "probability":
-
-            quantum_probability,
+                price_grid,
 
 
 
-        "expected_price":
+            "return_grid":
 
-            quantum_expected_price,
-
-
-
-        "volatility":
-
-            annual_vol * 100,
+                return_grid,
 
 
 
-        "returns":
+            "probability":
 
-            returns,
-
-
-
-        "market_regime":
-
-            regime,
+                quantum_probability,
 
 
 
-        "confidence_score":
+            "expected_price":
 
-            confidence_score,
-
-
-
-        "market_state":
-
-            market_state,
+                quantum_expected_price,
 
 
 
-        "risk_score":
+            "volatility":
 
-            risk_score,
-
-
-
-        "upside_probability":
-
-            upside_probability,
+                annual_vol * 100,
 
 
 
-        "downside_probability":
+            "returns":
 
-            downside_probability,
-
-
-
-        "neutral_probability":
-
-            neutral_probability,
+                returns,
 
 
 
-        "model_metadata": {
+            "market_regime":
+
+                regime,
 
 
-            "technical_signal":
 
-                technical_signal,
+            "confidence_score":
+
+                confidence_score,
+
 
 
             "market_state":
@@ -4836,34 +4798,72 @@ if run_button:
                 market_state,
 
 
-            "technical_weight":
 
-                technical_weight,
+            "risk_score":
 
-
-            "macro_weight":
-
-                macro_weight,
+                risk_score,
 
 
-            "global_weight":
 
-                global_weight,
+            "upside_probability":
 
-
-            "sector_weight":
-
-                sector_weight,
+                upside_probability,
 
 
-            "sentiment_weight":
 
-                sentiment_weight
+            "downside_probability":
 
+                downside_probability,
+
+
+
+            "neutral_probability":
+
+                neutral_probability,
+    
+
+
+            "model_metadata": {
+
+
+                "technical_signal":
+
+                    technical_signal,
+
+
+                "market_state":
+
+                    market_state,
+    
+
+                "technical_weight":
+
+                    technical_weight,
+
+
+                "macro_weight":
+
+                    macro_weight,
+
+
+                "global_weight":
+
+                    global_weight,
+
+
+                "sector_weight":
+
+                    sector_weight,
+
+
+                "sentiment_weight":
+
+                    sentiment_weight
+    
+
+            }
 
         }
-
-    }
 
 
 
