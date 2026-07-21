@@ -998,3 +998,243 @@ with tab2:
         )
 
     # Results continue in Part 2
+# ============================================================
+# EXECUTIVE REPORT TAB
+# ============================================================
+
+with tab3:
+
+    st.subheader(
+        f"Quantum Equity Report: {selected_ticker}"
+    )
+
+
+    if (
+        data["expected_pct"] > 1.5
+        and
+        data["prob_positive"] > 55
+    ):
+
+        signal = "🟢 BULLISH OUTLOOK"
+
+        explanation = (
+            "The model indicates positive expected movement "
+            "with stronger upside probability."
+        )
+
+
+    elif (
+        data["expected_pct"] < -1.5
+        or
+        data["prob_down_5"] > 30
+    ):
+
+        signal = "🔴 BEARISH / CAUTION"
+
+        explanation = (
+            "The model indicates elevated downside risk "
+            "and negative return pressure."
+        )
+
+
+    else:
+
+        signal = "🟡 NEUTRAL"
+
+        explanation = (
+            "The forecast remains balanced with limited "
+            "directional bias."
+        )
+
+
+
+    st.markdown(
+        f"## {signal}"
+    )
+
+
+    st.info(
+        explanation
+    )
+
+
+    st.markdown(
+        "### Analyst Summary"
+    )
+
+
+    risk_ratio = (
+        data["prob_up_5"]
+        /
+        max(
+            data["prob_down_5"],
+            0.01
+        )
+    )
+
+
+
+    st.write(
+        f"""
+Asset: {selected_ticker}
+
+Current Price:
+${data['S0']:.2f}
+
+Forecast Horizon:
+{forecast_days} days
+
+Expected Price:
+${data['expected_price']:.2f}
+
+Expected Return:
+{data['expected_pct']:+.2f}%
+
+Annualized Volatility:
+{data['ann_vol']:.1f}%
+
+Probability of Positive Return:
+{data['prob_positive']:.1f}%
+
+Upside vs Downside Ratio:
+{risk_ratio:.2f}
+"""
+    )
+
+
+    st.markdown(
+        "### Model Interpretation"
+    )
+
+
+    if data["expected_pct"] > 0:
+
+        st.write(
+            """
+The simulated distribution favors positive price movement.
+The expected price sits above the current market price.
+"""
+        )
+
+    else:
+
+        st.write(
+            """
+The simulated distribution favors negative price movement.
+The expected price sits below the current market price.
+"""
+        )
+
+
+
+# ============================================================
+# RAW DATA TAB
+# ============================================================
+
+with tab4:
+
+    st.subheader(
+        "Quantum State Probability Matrix"
+    )
+
+
+    raw_dataframe = pd.DataFrame(
+        {
+            "Price Outcome ($)": data["price_grid"],
+
+            "Return (%)": data["pct_grid"],
+
+            "Quantum Probability": data["quantum_probs"],
+
+            "Cumulative Probability": data["cdf"]
+        }
+    )
+
+
+
+    st.dataframe(
+        raw_dataframe,
+        width="stretch"
+    )
+
+
+
+    st.download_button(
+        label="Download Simulation Data CSV",
+        data=raw_dataframe.to_csv(
+            index=False
+        ),
+        file_name=f"{selected_ticker}_quantum_forecast.csv",
+        mime="text/csv"
+    )
+
+
+
+# ============================================================
+# HISTORICAL PRICE SECTION
+# ============================================================
+
+st.divider()
+
+
+with st.expander(
+    "View Historical Price Data"
+):
+
+
+    historical_fig, historical_ax = plt.subplots(
+        figsize=(10,3)
+    )
+
+
+    historical_ax.plot(
+        data["prices"].index,
+        data["prices"].values
+    )
+
+
+    historical_ax.set_title(
+        f"{selected_ticker} 1-Year Price History"
+    )
+
+
+    historical_ax.set_xlabel(
+        "Date"
+    )
+
+
+    historical_ax.set_ylabel(
+        "Price ($)"
+    )
+
+
+    historical_ax.grid(
+        True,
+        alpha=0.25
+    )
+
+
+    st.pyplot(
+        historical_fig
+    )
+
+
+    plt.close(
+        historical_fig
+    )
+
+
+
+# ============================================================
+# FOOTER
+# ============================================================
+
+st.divider()
+
+
+st.caption(
+    """
+Quantum Stock Forecast is an educational research model.
+Forecast outputs are statistical estimates and are not financial advice.
+"""
+)
