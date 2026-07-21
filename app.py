@@ -2,6 +2,9 @@ import streamlit as st
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import datetime
+
+from streamlit_autorefresh import st_autorefresh
 
 from qiskit import QuantumCircuit
 from qiskit_aer import AerSimulator
@@ -27,6 +30,18 @@ st.set_page_config(
     layout="wide",
 
     initial_sidebar_state="expanded"
+
+)
+
+
+
+# Auto refresh dashboard every 15 seconds
+
+st_autorefresh(
+
+    interval=15000,
+
+    key="market_refresh"
 
 )
 
@@ -91,9 +106,9 @@ This platform combines quantum probability sampling,
 
 technical indicators, market statistics,
 
-and risk analytics to estimate future
+and financial risk analytics to estimate
 
-price distributions.
+future price distributions.
 
 """
 
@@ -194,14 +209,9 @@ selected_ticker = (
 
 
 
-# ============================================================
-# FORECAST SETTINGS
-# ============================================================
-
-
 forecast_days = st.sidebar.selectbox(
 
-    "Forecast Horizon:",
+    "Forecast Horizon (Days):",
 
     options=[
 
@@ -278,7 +288,7 @@ run_button = st.sidebar.button(
 
 
 # ============================================================
-# LIVE PRICE
+# LIVE PRICE DASHBOARD
 # ============================================================
 
 
@@ -335,6 +345,14 @@ with price_col2:
 
 
 
+st.caption(
+
+    f"Last updated: {datetime.datetime.now().strftime('%H:%M:%S')}"
+
+)
+
+
+
 # ============================================================
 # MARKET DATA LOADER
 # ============================================================
@@ -348,11 +366,7 @@ with price_col2:
 
 )
 
-def load_market_data(
-
-    ticker
-
-):
+def load_market_data(ticker):
 
 
     data = get_stock_data(
@@ -360,7 +374,6 @@ def load_market_data(
         ticker
 
     )
-
 
 
     if data is None:
@@ -374,11 +387,6 @@ def load_market_data(
 
 
 
-# ============================================================
-# DATA PREVIEW
-# ============================================================
-
-
 market_data = load_market_data(
 
     selected_ticker
@@ -390,16 +398,16 @@ market_data = load_market_data(
 if market_data.empty:
 
 
-    st.warning(
+    st.error(
 
-        "No market data available."
+        "No market data found for this stock."
 
     )
 
 
     st.stop()
 # ============================================================
-# QUANTUM ENGINE WITH MARKET FEATURES
+# QUANTUM ENGINE
 # ============================================================
 
 
@@ -483,47 +491,94 @@ def run_quantum_engine(
 
 
     # ========================================================
-    # FEATURE EXTRACTION
+    # MARKET FEATURES
     # ========================================================
 
 
-    current_rsi = float(
+    rsi_values = (
 
         data["RSI"]
 
         .dropna()
 
-        .iloc[-1]
-
     )
 
 
-
-    current_momentum = float(
+    momentum_values = (
 
         data["Momentum"]
 
         .dropna()
 
-        .iloc[-1]
-
     )
 
 
-
-    current_volatility = float(
+    volatility_values = (
 
         data["Volatility"]
 
         .dropna()
 
-        .iloc[-1]
+    )
+
+
+
+    sma20_values = (
+
+        data["SMA20"]
+
+        .dropna()
+
+    )
+
+
+    sma50_values = (
+
+        data["SMA50"]
+
+        .dropna()
 
     )
 
 
 
-    current_volume_change = 0
+    current_rsi = float(
+
+        rsi_values.iloc[-1]
+
+    )
+
+
+    current_momentum = float(
+
+        momentum_values.iloc[-1]
+
+    )
+
+
+    current_volatility = float(
+
+        volatility_values.iloc[-1]
+
+    )
+
+
+    sma20 = float(
+
+        sma20_values.iloc[-1]
+
+    )
+
+
+    sma50 = float(
+
+        sma50_values.iloc[-1]
+
+    )
+
+
+
+    volume_change = 0
 
 
 
@@ -542,35 +597,11 @@ def run_quantum_engine(
         if not volume_values.empty:
 
 
-            current_volume_change = float(
+            volume_change = float(
 
                 volume_values.iloc[-1]
 
             )
-
-
-
-    sma20 = float(
-
-        data["SMA20"]
-
-        .dropna()
-
-        .iloc[-1]
-
-    )
-
-
-
-    sma50 = float(
-
-        data["SMA50"]
-
-        .dropna()
-
-        .iloc[-1]
-
-    )
 
 
 
@@ -615,7 +646,7 @@ def run_quantum_engine(
 
 
     # ========================================================
-    # FEATURE BASED MARKET BIAS
+    # FEATURE BIAS MODEL
     # ========================================================
 
 
@@ -631,7 +662,6 @@ def run_quantum_engine(
         feature_bias += 0.002
 
 
-
     else:
 
 
@@ -639,7 +669,7 @@ def run_quantum_engine(
 
 
 
-    # Momentum
+    # Momentum adjustment
 
     feature_bias += (
 
@@ -669,14 +699,13 @@ def run_quantum_engine(
 
     # Volume confirmation
 
-    if current_volume_change > 0:
+    if volume_change > 0:
 
 
         feature_bias += 0.0005
 
 
-
-    elif current_volume_change < 0:
+    elif volume_change < 0:
 
 
         feature_bias -= 0.0005
@@ -832,31 +861,6 @@ def run_quantum_engine(
 
 
 
-    # ========================================================
-    # MARKET FEATURE WEIGHTING
-    # ========================================================
-
-
-    feature_multiplier = (
-
-        1 +
-
-        feature_bias * 20
-
-    )
-
-
-
-    distribution = (
-
-        distribution *
-
-        feature_multiplier
-
-    )
-
-
-
     distribution = np.maximum(
 
         distribution,
@@ -966,12 +970,9 @@ def run_quantum_engine(
         quantum_probs
 
     )
-
-
-
-    # ========================================================
-    # RISK CALCULATIONS
-    # ========================================================
+    # ============================================================
+# RISK CALCULATIONS
+# ============================================================
 
 
     expected_price = np.sum(
@@ -1024,20 +1025,26 @@ def run_quantum_engine(
 
         var_index,
 
-        len(price_grid)-1
+        len(price_grid) - 1
 
     )
 
 
 
-    var_95_price = price_grid[var_index]
+    var_95_price = (
+
+        price_grid[var_index]
+
+    )
 
 
 
-    var_95_pct = pct_grid[var_index]
-    # ============================================================
-# FINISH RISK CALCULATIONS
-# ============================================================
+    var_95_pct = (
+
+        pct_grid[var_index]
+
+    )
+
 
 
     tail_prices = (
@@ -1260,7 +1267,7 @@ def run_quantum_engine(
 
         "volume_change":
 
-        current_volume_change
+        volume_change
 
     }
 
@@ -1389,7 +1396,7 @@ col5.metric(
 
 
 # ============================================================
-# FEATURE DASHBOARD
+# MARKET FEATURES
 # ============================================================
 
 
@@ -1399,17 +1406,17 @@ st.divider()
 
 st.subheader(
 
-    "Market Factors Used"
+    "Market Factors"
 
 )
 
 
 
-factor_col1, factor_col2, factor_col3, factor_col4 = st.columns(4)
+factor1, factor2, factor3, factor4 = st.columns(4)
 
 
 
-factor_col1.metric(
+factor1.metric(
 
     "RSI",
 
@@ -1419,9 +1426,9 @@ factor_col1.metric(
 
 
 
-factor_col2.metric(
+factor2.metric(
 
-    "20 Day Momentum",
+    "Momentum",
 
     f"{data['momentum'] * 100:.2f}%"
 
@@ -1429,9 +1436,9 @@ factor_col2.metric(
 
 
 
-factor_col3.metric(
+factor3.metric(
 
-    "SMA Trend",
+    "Moving Average",
 
     "Bullish"
 
@@ -1445,7 +1452,7 @@ factor_col3.metric(
 
 
 
-factor_col4.metric(
+factor4.metric(
 
     "Volume Change",
 
@@ -1669,7 +1676,6 @@ with tab1:
     )
 
 
-
     ax.set_ylabel(
 
         "Return (%)"
@@ -1708,8 +1714,6 @@ with tab1:
 
 
 
-
-
 # ============================================================
 # RISK TAB
 # ============================================================
@@ -1738,9 +1742,7 @@ with tab2:
 
         data["pct_grid"],
 
-        data["quantum_probs"],
-
-        linewidth=2
+        data["quantum_probs"]
 
     )
 
@@ -1859,14 +1861,14 @@ with tab2:
 
     st.write(
 
-        f"Probability of +5% Gain: {data['prob_up_5']:.1f}%"
+        f"+5% Gain Probability: {data['prob_up_5']:.1f}%"
 
     )
 
 
     st.write(
 
-        f"Probability of -5% Loss: {data['prob_down_5']:.1f}%"
+        f"-5% Loss Probability: {data['prob_down_5']:.1f}%"
 
     )
 
@@ -1945,7 +1947,7 @@ Current Price:
 ${data['S0']:.2f}
 
 
-Forecast:
+Forecast Horizon:
 
 {forecast_days} days
 
@@ -1960,9 +1962,14 @@ Expected Return:
 {data['expected_pct']:+.2f}%
 
 
-Positive Probability:
+Positive Return Probability:
 
 {data['prob_positive']:.1f}%
+
+
+Annual Volatility:
+
+{data['ann_vol']:.1f}%
 
 
 RSI:
@@ -2002,7 +2009,7 @@ with tab4:
             data["price_grid"],
 
 
-            "Return %":
+            "Return (%)":
 
             data["pct_grid"],
 
@@ -2012,7 +2019,7 @@ with tab4:
             data["quantum_probs"],
 
 
-            "CDF":
+            "Cumulative Probability":
 
             data["cdf"]
 
@@ -2051,7 +2058,7 @@ with tab4:
 
 
 # ============================================================
-# HISTORICAL DATA
+# HISTORICAL PRICE
 # ============================================================
 
 
@@ -2066,7 +2073,7 @@ with st.expander(
 ):
 
 
-    fig3, ax3 = plt.subplots(
+    historical_fig, historical_ax = plt.subplots(
 
         figsize=(10,3)
 
@@ -2074,7 +2081,7 @@ with st.expander(
 
 
 
-    ax3.plot(
+    historical_ax.plot(
 
         data["prices"].values
 
@@ -2082,15 +2089,15 @@ with st.expander(
 
 
 
-    ax3.set_title(
+    historical_ax.set_title(
 
-        f"{selected_ticker} Historical Price"
+        f"{selected_ticker} Historical Prices"
 
     )
 
 
 
-    ax3.set_xlabel(
+    historical_ax.set_xlabel(
 
         "Trading Days"
 
@@ -2098,7 +2105,7 @@ with st.expander(
 
 
 
-    ax3.set_ylabel(
+    historical_ax.set_ylabel(
 
         "Price"
 
@@ -2106,7 +2113,7 @@ with st.expander(
 
 
 
-    ax3.grid(
+    historical_ax.grid(
 
         True,
 
@@ -2118,7 +2125,7 @@ with st.expander(
 
     st.pyplot(
 
-        fig3
+        historical_fig
 
     )
 
@@ -2126,7 +2133,7 @@ with st.expander(
 
     plt.close(
 
-        fig3
+        historical_fig
 
     )
 
@@ -2152,7 +2159,6 @@ Forecast outputs are statistical estimates and are not financial advice.
 """
 
 )
-
 
 
 prices = market_data["Close"]
