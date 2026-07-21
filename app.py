@@ -578,13 +578,7 @@ if market_data.empty:
 # ============================================================
 
 
-@st.cache_data(
 
-    ttl=1800,
-
-    max_entries=50
-
-)
 
 def quantum_forecast(
 
