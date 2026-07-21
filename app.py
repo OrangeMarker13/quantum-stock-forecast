@@ -36,7 +36,534 @@ from prediction_memory import (
     get_prediction_adjustment
 )
 
+# ============================================================
+# PREMIUM QUANTUM TERMINAL UI ENGINE
+# PLACE AFTER IMPORTS
+# ============================================================
 
+import streamlit as st
+
+
+def inject_premium_ui():
+
+    st.markdown(
+    """
+    <style>
+
+
+    /* =====================================================
+       GLOBAL BACKGROUND
+    ===================================================== */
+
+    .stApp {
+
+        background:
+        radial-gradient(
+            circle at 10% 10%,
+            rgba(34,211,238,0.20),
+            transparent 35%
+        ),
+
+        radial-gradient(
+            circle at 90% 90%,
+            rgba(168,85,247,0.18),
+            transparent 40%
+        ),
+
+        linear-gradient(
+            135deg,
+            #020617,
+            #0f172a,
+            #020617
+        );
+
+        color:#e2e8f0;
+
+    }
+
+
+
+    /* =====================================================
+       MAIN TEXT
+    ===================================================== */
+
+
+    h1 {
+
+        color:#22d3ee !important;
+
+        font-weight:900 !important;
+
+        letter-spacing:-1px;
+
+        text-shadow:
+        0 0 15px rgba(34,211,238,0.45);
+
+    }
+
+
+    h2,h3 {
+
+        color:#e0f2fe !important;
+
+    }
+
+
+    p {
+
+        color:#cbd5e1;
+
+    }
+
+
+
+    /* =====================================================
+       SIDEBAR
+    ===================================================== */
+
+
+    section[data-testid="stSidebar"] {
+
+
+        background:
+
+        linear-gradient(
+            180deg,
+            #020617,
+            #111827
+        );
+
+
+        border-right:
+
+        1px solid
+
+        rgba(34,211,238,0.25);
+
+    }
+
+
+
+    section[data-testid="stSidebar"] h1 {
+
+        color:#22d3ee !important;
+
+    }
+
+
+
+    /* =====================================================
+       BUTTONS
+    ===================================================== */
+
+
+    .stButton button {
+
+
+        width:100%;
+
+
+        background:
+
+        linear-gradient(
+            90deg,
+            #06b6d4,
+            #8b5cf6
+        );
+
+
+        color:white;
+
+
+        border:none;
+
+
+        border-radius:14px;
+
+
+        padding:12px;
+
+
+        font-weight:800;
+
+
+        font-size:16px;
+
+
+        transition:all .25s ease;
+
+
+        box-shadow:
+
+        0 0 20px
+
+        rgba(34,211,238,0.35);
+
+
+    }
+
+
+
+    .stButton button:hover {
+
+
+        transform:
+
+        translateY(-3px)
+
+        scale(1.02);
+
+
+        box-shadow:
+
+        0 0 35px
+
+        rgba(139,92,246,0.65);
+
+
+    }
+
+
+
+    /* =====================================================
+       METRIC CARDS
+    ===================================================== */
+
+
+    div[data-testid="metric-container"] {
+
+
+        background:
+
+        linear-gradient(
+            145deg,
+            rgba(15,23,42,.95),
+            rgba(30,41,59,.95)
+        );
+
+
+        border:
+
+        1px solid
+
+        rgba(34,211,238,.25);
+
+
+        border-radius:18px;
+
+
+        padding:18px;
+
+
+        box-shadow:
+
+        0 10px 35px
+
+        rgba(0,0,0,.35);
+
+
+        transition:.25s;
+
+
+    }
+
+
+
+    div[data-testid="metric-container"]:hover {
+
+
+        transform:
+
+        translateY(-5px);
+
+
+        border-color:
+
+        #22d3ee;
+
+
+        box-shadow:
+
+        0 0 30px
+
+        rgba(34,211,238,.35);
+
+
+    }
+
+
+
+
+    /* =====================================================
+       CUSTOM METRIC BOX
+    ===================================================== */
+
+
+    .metric-box {
+
+
+        background:
+
+
+        linear-gradient(
+            145deg,
+            rgba(15,23,42,.9),
+            rgba(30,41,59,.95)
+        );
+
+
+        border:
+
+        1px solid
+
+        rgba(56,189,248,.35);
+
+
+        border-radius:20px;
+
+
+        padding:20px;
+
+
+        text-align:center;
+
+
+        box-shadow:
+
+        0 15px 40px
+
+        rgba(0,0,0,.4);
+
+
+        transition:.25s;
+
+
+    }
+
+
+
+    .metric-box:hover {
+
+
+        transform:
+
+        translateY(-6px);
+
+
+        box-shadow:
+
+        0 0 40px
+
+        rgba(34,211,238,.35);
+
+
+    }
+
+
+
+
+    /* =====================================================
+       POSITIVE / NEGATIVE
+    ===================================================== */
+
+
+    .positive {
+
+
+        color:#22ff88 !important;
+
+
+        font-weight:900;
+
+
+        text-shadow:
+
+        0 0 12px
+
+        rgba(34,255,136,.45);
+
+    }
+
+
+
+    .negative {
+
+
+        color:#ff5555 !important;
+
+
+        font-weight:900;
+
+
+        text-shadow:
+
+        0 0 12px
+
+        rgba(255,85,85,.45);
+
+    }
+
+
+
+
+    /* =====================================================
+       TABS
+    ===================================================== */
+
+
+    button[data-baseweb="tab"] {
+
+
+        background:
+
+        rgba(15,23,42,.7);
+
+
+        border-radius:12px;
+
+
+        margin-right:6px;
+
+
+        color:#cbd5e1;
+
+
+        font-weight:700;
+
+
+    }
+
+
+
+    button[data-baseweb="tab"]:hover {
+
+
+        color:#22d3ee;
+
+
+    }
+
+
+
+    button[data-baseweb="tab"][aria-selected="true"] {
+
+
+        background:
+
+        linear-gradient(
+            90deg,
+            #0891b2,
+            #7c3aed
+        );
+
+
+        color:white;
+
+
+    }
+
+
+
+
+    /* =====================================================
+       INPUT BOXES
+    ===================================================== */
+
+
+    input {
+
+
+        background:
+
+        #020617 !important;
+
+
+        color:white !important;
+
+
+        border-radius:12px !important;
+
+
+    }
+
+
+
+    div[data-baseweb="select"] {
+
+
+        border-radius:12px;
+
+    }
+
+
+
+
+    /* =====================================================
+       DATAFRAMES
+    ===================================================== */
+
+
+    div[data-testid="stDataFrame"] {
+
+
+        border-radius:16px;
+
+
+        overflow:hidden;
+
+
+        border:
+
+        1px solid
+
+        rgba(34,211,238,.25);
+
+
+    }
+
+
+
+    /* =====================================================
+       DIVIDERS
+    ===================================================== */
+
+
+    hr {
+
+
+        border-color:
+
+        rgba(34,211,238,.25);
+
+
+    }
+
+
+
+
+    /* =====================================================
+       SPINNER
+    ===================================================== */
+
+
+    div[data-testid="stSpinner"] {
+
+
+        color:#22d3ee;
+
+
+    }
+
+
+
+    </style>
+    """,
+    unsafe_allow_html=True
+    )
+
+
+
+inject_premium_ui()
 
 # ============================================================
 # STREAMLIT CONFIGURATION
