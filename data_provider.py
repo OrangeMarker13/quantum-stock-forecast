@@ -1431,17 +1431,14 @@ def get_company_info(ticker):
 
     ticker = ticker.upper().strip()
 
-
     url = (
         "https://query1.finance.yahoo.com/"
         f"v7/finance/quote?symbols={ticker}"
     )
 
-
     try:
 
         data = yahoo_request(url)
-
 
         if data:
 
@@ -1451,11 +1448,9 @@ def get_company_info(ticker):
                 .get("result", [])
             )
 
-
             if results:
 
                 info = results[0]
-
 
                 return {
 
@@ -1489,7 +1484,7 @@ def get_company_info(ticker):
     except Exception as error:
 
         print(
-            "Company lookup error:",
+            "Company info error:",
             error
         )
 
@@ -1497,27 +1492,16 @@ def get_company_info(ticker):
     known_companies = {
 
         "AAPL": "Apple Inc.",
-
         "MSFT": "Microsoft Corporation",
-
         "NVDA": "NVIDIA Corporation",
-
         "GOOGL": "Alphabet Inc.",
-
         "AMZN": "Amazon.com, Inc.",
-
         "META": "Meta Platforms, Inc.",
-
         "TSLA": "Tesla, Inc.",
-
         "AMD": "Advanced Micro Devices, Inc.",
-
         "NFLX": "Netflix, Inc.",
-
         "SPY": "SPDR S&P 500 ETF Trust",
-
         "QQQ": "Invesco QQQ Trust",
-
         "BTC-USD": "Bitcoin"
 
     }
@@ -1541,64 +1525,6 @@ def get_company_info(ticker):
         "industry": "Unknown"
 
     }
-
-
-
-    except Exception as error:
-
-
-        print(
-
-            "Company info error:",
-
-            error
-
-        )
-
-
-
-    return {
-
-
-        "name":
-
-        ticker,
-
-
-
-        "symbol":
-
-        ticker,
-
-
-
-        "exchange":
-
-        "Unknown",
-
-
-
-        "currency":
-
-        "USD",
-
-
-
-        "sector":
-
-        "Unknown",
-
-
-
-        "industry":
-
-        "Unknown"
-
-    }
-
-
-
-
 # ============================================================
 # MARKET STATUS
 # ============================================================
