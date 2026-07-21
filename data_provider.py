@@ -2,6 +2,7 @@ import os
 import requests
 import pandas as pd
 import numpy as np
+import streamlit as st
 
 
 DATA_FOLDER = "data"
@@ -51,7 +52,7 @@ def load_saved_data(ticker):
 
         if not os.path.exists(filepath):
 
-            return None
+            return pd.DataFrame()
 
 
 
@@ -72,7 +73,7 @@ def load_saved_data(ticker):
         )
 
 
-        return None
+        return pd.DataFrame()
 
 
 
@@ -82,6 +83,10 @@ def load_saved_data(ticker):
 
 
 def add_indicators(data):
+
+
+    data = data.copy()
+
 
 
     data["Return"] = (
@@ -127,7 +132,6 @@ def add_indicators(data):
     )
 
 
-
     loss = -delta.clip(
         upper=0
     )
@@ -143,7 +147,6 @@ def add_indicators(data):
         .mean()
 
     )
-
 
 
     avg_loss = (
@@ -210,6 +213,7 @@ def add_indicators(data):
 
     if "Volume" in data.columns:
 
+
         data["Volume_Change"] = (
 
             data["Volume"]
@@ -219,15 +223,22 @@ def add_indicators(data):
         )
 
 
-
     return data
 
 
 
 # ============================================================
-# YAHOO HISTORICAL DATA
+# HISTORICAL MARKET DATA
 # ============================================================
 
+
+@st.cache_data(
+
+    ttl=3600,
+
+    max_entries=100
+
+)
 
 def get_stock_data(ticker):
 
@@ -239,7 +250,6 @@ def get_stock_data(ticker):
         f"?range=2y&interval=1d"
 
     )
-
 
 
     try:
@@ -263,13 +273,13 @@ def get_stock_data(ticker):
 
 
 
-        data = response.json()
+        json_data = response.json()
 
 
 
         result = (
 
-            data
+            json_data
 
             .get("chart", {})
 
@@ -281,7 +291,11 @@ def get_stock_data(ticker):
 
         if not result:
 
-            saved = load_saved_data(ticker)
+
+            saved = load_saved_data(
+                ticker
+            )
+
 
             return saved
 
@@ -291,17 +305,18 @@ def get_stock_data(ticker):
 
 
 
-        timestamps = result["timestamp"]
-
+        timestamps = result.get(
+            "timestamp"
+        )
 
 
         quote = (
 
             result
 
-            ["indicators"]
+            .get("indicators", {})
 
-            ["quote"][0]
+            .get("quote", [{}])[0]
 
         )
 
@@ -321,13 +336,19 @@ def get_stock_data(ticker):
 
                 ),
 
+
                 "Close":
 
-                quote["close"],
+                quote.get(
+                    "close"
+                ),
+
 
                 "Volume":
 
-                quote["volume"]
+                quote.get(
+                    "volume"
+                )
 
             }
 
@@ -346,7 +367,9 @@ def get_stock_data(ticker):
 
 
         dataframe = add_indicators(
+
             dataframe
+
         )
 
 
@@ -377,9 +400,14 @@ def get_stock_data(ticker):
         )
 
 
+
         return load_saved_data(
+
             ticker
+
         )
+
+
 
 
 
@@ -387,6 +415,14 @@ def get_stock_data(ticker):
 # LIVE PRICE
 # ============================================================
 
+
+@st.cache_data(
+
+    ttl=15,
+
+    max_entries=200
+
+)
 
 def get_live_price(ticker):
 
@@ -425,19 +461,45 @@ def get_live_price(ticker):
 
 
 
-        price = (
+        result = (
 
             data
 
-            ["chart"]
+            .get("chart", {})
 
-            ["result"][0]
+            .get("result")
+
+        )
+
+
+
+        if not result:
+
+
+            return None
+
+
+
+        price = (
+
+            result[0]
 
             ["meta"]
 
-            ["regularMarketPrice"]
+            .get(
+
+                "regularMarketPrice"
+
+            )
 
         )
+
+
+
+        if price is None:
+
+
+            return None
 
 
 
@@ -445,7 +507,16 @@ def get_live_price(ticker):
 
 
 
-    except Exception:
+    except Exception as error:
+
+
+        print(
+
+            "Live price error:",
+
+            error
+
+        )
 
 
         return None
