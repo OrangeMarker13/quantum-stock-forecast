@@ -1429,11 +1429,166 @@ def get_live_price(ticker):
 
     ttl=3600,
 
-    max_entries=100
+    max_entries=200
 
 )
 
 def get_company_info(ticker):
+
+
+    ticker = ticker.upper().strip()
+
+
+    url = (
+
+        "https://query1.finance.yahoo.com/"
+
+        f"v10/finance/quoteSummary/{ticker}"
+
+        "?modules=price,summaryProfile"
+
+    )
+
+
+    try:
+
+
+        data = yahoo_request(
+
+            url
+
+        )
+
+
+        if data:
+
+
+            result = (
+
+                data
+
+                .get(
+
+                    "quoteSummary",
+
+                    {}
+
+                )
+
+                .get(
+
+                    "result",
+
+                    []
+
+                )
+
+            )
+
+
+            if result:
+
+
+                price_data = result[0].get(
+
+                    "price",
+
+                    {}
+
+                )
+
+
+                profile = result[0].get(
+
+                    "summaryProfile",
+
+                    {}
+
+                )
+
+
+                return {
+
+
+                    "name":
+
+                    price_data.get(
+
+                        "longName",
+
+                        ticker
+
+                    ),
+
+
+
+                    "symbol":
+
+                    ticker,
+
+
+
+                    "exchange":
+
+                    price_data.get(
+
+                        "exchangeName",
+
+                        "Unknown"
+
+                    ),
+
+
+
+                    "currency":
+
+                    price_data.get(
+
+                        "currency",
+
+                        "USD"
+
+                    ),
+
+
+
+                    "sector":
+
+                    profile.get(
+
+                        "sector",
+
+                        "Unknown"
+
+                    ),
+
+
+
+                    "industry":
+
+                    profile.get(
+
+                        "industry",
+
+                        "Unknown"
+
+                    )
+
+                }
+
+
+
+    except Exception as error:
+
+
+        print(
+
+            "Company info error:",
+
+            error
+
+        )
+
 
 
     return {
@@ -1441,7 +1596,13 @@ def get_company_info(ticker):
 
         "name":
 
-        ticker.upper(),
+        ticker,
+
+
+
+        "symbol":
+
+        ticker,
 
 
 
@@ -1453,10 +1614,21 @@ def get_company_info(ticker):
 
         "currency":
 
-        "USD"
+        "USD",
+
+
+
+        "sector":
+
+        "Unknown",
+
+
+
+        "industry":
+
+        "Unknown"
 
     }
-
 
 
 
