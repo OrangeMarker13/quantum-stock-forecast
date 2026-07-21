@@ -1507,13 +1507,6 @@ with tab1:
     )
 
 
-    st.write(
-        "Adaptive Weights"
-    )
-
-    st.json(
-        forecast["adaptive_weights"]
-    )
 
 
 
