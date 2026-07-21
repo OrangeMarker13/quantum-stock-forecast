@@ -230,73 +230,276 @@ st_autorefresh(
 
 
 st.markdown(
-
 """
-
 <style>
 
-
 .stApp {
+    background:
+    radial-gradient(circle at top left, #172554, transparent 35%),
+    radial-gradient(circle at bottom right, #3b0764, transparent 35%),
+    #050816;
 
-    background-color:#080d18;
-
-    color:#e5e7eb;
-
+    color: #f8fafc;
 }
 
 
+/* Sidebar */
 
 [data-testid="stSidebar"] {
 
-    background-color:#111827;
+    background:
+    linear-gradient(
+        180deg,
+        #111827,
+        #020617
+    );
+
+    border-right: 1px solid #334155;
+}
+
+
+/* Main title */
+
+h1 {
+
+    color: #22d3ee !important;
+
+    text-shadow:
+    0 0 15px #22d3ee;
 
 }
 
 
+/* Headers */
+
+h2, h3 {
+
+    color: #e0f2fe !important;
+
+}
+
+
+/* Buttons */
+
+.stButton > button {
+
+    width: 100%;
+
+    background:
+    linear-gradient(
+        90deg,
+        #06b6d4,
+        #8b5cf6
+    );
+
+    color: white;
+
+    border-radius: 12px;
+
+    border: none;
+
+    font-weight: bold;
+
+    padding: 12px;
+
+    transition: 0.3s;
+
+}
+
+
+.stButton > button:hover {
+
+    transform: scale(1.03);
+
+    box-shadow:
+    0 0 20px #22d3ee;
+
+}
+
+
+/* Metric cards */
 
 .metric-box {
 
-    background:#111827;
+    background:
 
-    border:1px solid #263246;
+    linear-gradient(
+        145deg,
+        #111827,
+        #1e293b
+    );
 
-    padding:16px;
 
-    border-radius:12px;
+    border:
+
+    1px solid #334155;
+
+
+    padding:
+
+    18px;
+
+
+    border-radius:
+
+    16px;
+
+
+    box-shadow:
+
+    0 0 20px rgba(34,211,238,0.15);
 
 }
 
 
+
+/* Status */
 
 .status-box {
 
-    background:#0f172a;
+    background:
 
-    border-left:4px solid #22c55e;
+    rgba(15,23,42,0.8);
 
-    padding:12px;
 
-    border-radius:8px;
+    border-left:
+
+    5px solid #22c55e;
+
+
+    padding:
+
+    14px;
+
+
+    border-radius:
+
+    10px;
 
 }
 
 
 
-h1,h2,h3 {
+/* Positive numbers */
 
-    color:#f8fafc;
+.positive {
+
+    color:
+
+    #22c55e;
+
+    font-weight:
+
+    bold;
+
+}
+
+
+
+/* Negative numbers */
+
+.negative {
+
+    color:
+
+    #ef4444;
+
+    font-weight:
+
+    bold;
+
+}
+
+
+
+/* Inputs */
+
+input {
+
+    background-color:
+
+    #111827 !important;
+
+    color:
+
+    white !important;
+
+}
+
+
+
+/* Dropdown menus */
+
+[data-baseweb="select"] {
+
+    background-color:
+
+    #111827;
+
+}
+
+
+
+/* Divider */
+
+hr {
+
+    border-color:
+
+    #334155;
+
+}
+
+
+/* Dataframes */
+
+[data-testid="stDataFrame"] {
+
+    border-radius:
+
+    12px;
+
+}
+
+
+
+/* Tabs */
+
+button[data-baseweb="tab"] {
+
+    color:
+
+    #94a3b8;
+
+}
+
+
+button[data-baseweb="tab"]:hover {
+
+    color:
+
+    #22d3ee;
+
+}
+
+
+button[aria-selected="true"] {
+
+    color:
+
+    #22d3ee !important;
+
+    border-bottom:
+
+    2px solid #22d3ee;
 
 }
 
 
 </style>
-
 """,
-
 unsafe_allow_html=True
-
 )
-
 
 
 
