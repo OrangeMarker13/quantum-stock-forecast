@@ -9,6 +9,7 @@ DATA_FOLDER = "data"
 
 
 if not os.path.exists(DATA_FOLDER):
+
     os.makedirs(DATA_FOLDER)
 
 
@@ -20,20 +21,31 @@ if not os.path.exists(DATA_FOLDER):
 
 def save_stock_data(ticker, dataframe):
 
+
     try:
+
 
         filepath = f"{DATA_FOLDER}/{ticker}.csv"
 
+
         dataframe.to_csv(
+
             filepath,
+
             index=False
+
         )
+
 
     except Exception as error:
 
+
         print(
+
             "Save error:",
+
             error
+
         )
 
 
@@ -45,19 +57,25 @@ def save_stock_data(ticker, dataframe):
 
 def load_saved_data(ticker):
 
+
     try:
+
 
         filepath = f"{DATA_FOLDER}/{ticker}.csv"
 
 
+
         if not os.path.exists(filepath):
+
 
             return pd.DataFrame()
 
 
 
         data = pd.read_csv(
+
             filepath
+
         )
 
 
@@ -67,9 +85,13 @@ def load_saved_data(ticker):
 
     except Exception as error:
 
+
         print(
+
             "Load error:",
+
             error
+
         )
 
 
@@ -128,12 +150,17 @@ def add_indicators(data):
 
 
     gain = delta.clip(
+
         lower=0
+
     )
 
 
+
     loss = -delta.clip(
+
         upper=0
+
     )
 
 
@@ -147,6 +174,7 @@ def add_indicators(data):
         .mean()
 
     )
+
 
 
     avg_loss = (
@@ -223,6 +251,7 @@ def add_indicators(data):
         )
 
 
+
     return data
 
 
@@ -246,10 +275,13 @@ def get_stock_data(ticker):
     url = (
 
         f"https://query1.finance.yahoo.com/"
+
         f"v8/finance/chart/{ticker}"
+
         f"?range=2y&interval=1d"
 
     )
+
 
 
     try:
@@ -293,7 +325,9 @@ def get_stock_data(ticker):
 
 
             saved = load_saved_data(
+
                 ticker
+
             )
 
 
@@ -306,8 +340,11 @@ def get_stock_data(ticker):
 
 
         timestamps = result.get(
+
             "timestamp"
+
         )
+
 
 
         quote = (
@@ -326,6 +363,7 @@ def get_stock_data(ticker):
 
             {
 
+
                 "Date":
 
                 pd.to_datetime(
@@ -337,18 +375,25 @@ def get_stock_data(ticker):
                 ),
 
 
+
                 "Close":
 
                 quote.get(
+
                     "close"
+
                 ),
+
 
 
                 "Volume":
 
                 quote.get(
+
                     "volume"
+
                 )
+
 
             }
 
@@ -400,7 +445,6 @@ def get_stock_data(ticker):
         )
 
 
-
         return load_saved_data(
 
             ticker
@@ -412,7 +456,7 @@ def get_stock_data(ticker):
 
 
 # ============================================================
-# LIVE PRICE
+# LIVE PRICE WITH DAILY CHANGE
 # ============================================================
 
 
@@ -433,6 +477,7 @@ def get_live_price(ticker):
         url = (
 
             f"https://query1.finance.yahoo.com/"
+
             f"v8/finance/chart/{ticker}"
 
         )
@@ -480,30 +525,92 @@ def get_live_price(ticker):
 
 
 
-        price = (
+        meta = result[0].get(
 
-            result[0]
+            "meta",
 
-            ["meta"]
-
-            .get(
-
-                "regularMarketPrice"
-
-            )
+            {}
 
         )
 
 
 
-        if price is None:
+        current_price = meta.get(
+
+            "regularMarketPrice"
+
+        )
+
+
+
+        previous_close = meta.get(
+
+            "previousClose"
+
+        )
+
+
+
+        if current_price is None:
 
 
             return None
 
 
 
-        return float(price)
+        if previous_close:
+
+
+            change_amount = (
+
+                current_price -
+
+                previous_close
+
+            )
+
+
+
+            change_percent = (
+
+                change_amount /
+
+                previous_close
+
+            ) * 100
+
+
+
+        else:
+
+
+            change_amount = 0
+
+
+            change_percent = 0
+
+
+
+        return {
+
+
+            "price":
+
+            float(current_price),
+
+
+
+            "change":
+
+            float(change_amount),
+
+
+
+            "change_percent":
+
+            float(change_percent)
+
+        }
 
 
 
