@@ -1418,163 +1418,129 @@ def get_live_price(ticker):
 
 
 
-
-
 # ============================================================
 # COMPANY INFO
 # ============================================================
 
 
 @st.cache_data(
-
     ttl=3600,
-
     max_entries=200
-
 )
-
 def get_company_info(ticker):
-
 
     ticker = ticker.upper().strip()
 
 
     url = (
-
         "https://query1.finance.yahoo.com/"
-
-        f"v10/finance/quoteSummary/{ticker}"
-
-        "?modules=price,summaryProfile"
-
+        f"v7/finance/quote?symbols={ticker}"
     )
 
 
     try:
 
-
-        data = yahoo_request(
-
-            url
-
-        )
+        data = yahoo_request(url)
 
 
         if data:
 
-
-            result = (
-
+            results = (
                 data
-
-                .get(
-
-                    "quoteSummary",
-
-                    {}
-
-                )
-
-                .get(
-
-                    "result",
-
-                    []
-
-                )
-
+                .get("quoteResponse", {})
+                .get("result", [])
             )
 
 
-            if result:
+            if results:
 
-
-                price_data = result[0].get(
-
-                    "price",
-
-                    {}
-
-                )
-
-
-                profile = result[0].get(
-
-                    "summaryProfile",
-
-                    {}
-
-                )
+                info = results[0]
 
 
                 return {
 
-
-                    "name":
-
-                    price_data.get(
-
+                    "name": info.get(
                         "longName",
-
-                        ticker
-
+                        info.get(
+                            "shortName",
+                            ticker
+                        )
                     ),
 
+                    "symbol": ticker,
 
-
-                    "symbol":
-
-                    ticker,
-
-
-
-                    "exchange":
-
-                    price_data.get(
-
-                        "exchangeName",
-
+                    "exchange": info.get(
+                        "fullExchangeName",
                         "Unknown"
-
                     ),
 
-
-
-                    "currency":
-
-                    price_data.get(
-
+                    "currency": info.get(
                         "currency",
-
                         "USD"
-
                     ),
 
+                    "sector": "Unknown",
 
-
-                    "sector":
-
-                    profile.get(
-
-                        "sector",
-
-                        "Unknown"
-
-                    ),
-
-
-
-                    "industry":
-
-                    profile.get(
-
-                        "industry",
-
-                        "Unknown"
-
-                    )
+                    "industry": "Unknown"
 
                 }
+
+
+    except Exception as error:
+
+        print(
+            "Company lookup error:",
+            error
+        )
+
+
+    known_companies = {
+
+        "AAPL": "Apple Inc.",
+
+        "MSFT": "Microsoft Corporation",
+
+        "NVDA": "NVIDIA Corporation",
+
+        "GOOGL": "Alphabet Inc.",
+
+        "AMZN": "Amazon.com, Inc.",
+
+        "META": "Meta Platforms, Inc.",
+
+        "TSLA": "Tesla, Inc.",
+
+        "AMD": "Advanced Micro Devices, Inc.",
+
+        "NFLX": "Netflix, Inc.",
+
+        "SPY": "SPDR S&P 500 ETF Trust",
+
+        "QQQ": "Invesco QQQ Trust",
+
+        "BTC-USD": "Bitcoin"
+
+    }
+
+
+    return {
+
+        "name": known_companies.get(
+            ticker,
+            ticker
+        ),
+
+        "symbol": ticker,
+
+        "exchange": "Unknown",
+
+        "currency": "USD",
+
+        "sector": "Unknown",
+
+        "industry": "Unknown"
+
+    }
 
 
 
