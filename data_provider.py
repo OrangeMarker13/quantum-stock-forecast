@@ -1523,4 +1523,12 @@ if __name__ == "__main__":
         live
 
     )
+if __name__ == "__main__":
 
+    test = get_stock_data("AAPL")
+
+    print(test.head())
+
+    print(test.shape)
+
+    print(test.columns)
