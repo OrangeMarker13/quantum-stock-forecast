@@ -1164,7 +1164,7 @@ def get_stock_data(ticker):
 
 
         return dataframe
-            except Exception as error:
+    except Exception as error:
 
 
         print(
