@@ -1754,21 +1754,26 @@ if __name__ == "__main__":
     ttl=3600,
     max_entries=500
 )
+# ============================================================
+# STOCK SEARCH
+# ============================================================
+
+
+@st.cache_data(
+    ttl=3600,
+    max_entries=500
+)
 def search_stocks(query):
 
     query = query.strip()
 
     if len(query) < 1:
-
         return []
 
 
     url = (
-
         "https://query1.finance.yahoo.com/"
-
         f"v1/finance/search?q={query}"
-
     )
 
 
@@ -1776,9 +1781,7 @@ def search_stocks(query):
 
         data = yahoo_request(url)
 
-
         if not data:
-
             return []
 
 
@@ -1799,17 +1802,13 @@ def search_stocks(query):
 
 
             name = (
-
                 item.get(
                     "longname"
                 )
-
                 or
-
                 item.get(
                     "shortname"
                 )
-
             )
 
 
@@ -1819,39 +1818,17 @@ def search_stocks(query):
             )
 
 
-            exchange = item.get(
-                "exchange",
-                ""
-            )
+            priority = 0
+
+
+            if quote_type == "EQUITY":
+
+                priority += 10
+
 
             if symbol and name:
 
-                priority = 0
-
-
-                # Prioritize normal listed stocks
-
-                if quote_type == "EQUITY":
-
-                    priority += 10
-
-
-                # Prioritize major exchanges
-
-                if exchange in [
-
-                    "NMS",
-                    "NYQ",
-                    "NGM",
-                    "PCX"
-
-                ]:
-
-                    priority += 5
-
-
-
-                                results.append(
+                results.append(
                     {
                         "label": f"{name} ({symbol})",
                         "symbol": symbol,
@@ -1860,31 +1837,15 @@ def search_stocks(query):
                     }
                 )
 
-                    {
 
-                        "label":
-                        f"{name} ({symbol})",
-
-
-                        "symbol":
-                        symbol,
+        results = sorted(
+            results,
+            key=lambda x: x["priority"],
+            reverse=True
+        )
 
 
-                        "name":
-                        name
-
-                    }
-
-                )
-
-
-    results = sorted(
-        results,
-        key=lambda x: x["priority"],
-        reverse=True
-    )
-
-    return results[:10]
+        return results[:10]
 
 
     except Exception as error:
