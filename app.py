@@ -918,9 +918,9 @@ with header3:
                 f"🔴 {daily_change:.2f}%"
                 f"</span>"
             )
-     else:
+        else:
 
-         change_display = "N/A"
+             change_display = "N/A"
 
 
     st.metric(
