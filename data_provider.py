@@ -5,7 +5,13 @@ import numpy as np
 import streamlit as st
 
 
+# ============================================================
+# CONFIGURATION
+# ============================================================
+
+
 DATA_FOLDER = "data"
+
 
 
 if not os.path.exists(DATA_FOLDER):
@@ -14,18 +20,39 @@ if not os.path.exists(DATA_FOLDER):
 
 
 
+YAHOO_HEADERS = {
+
+    "User-Agent":
+
+    "Mozilla/5.0"
+
+}
+
+
+
 # ============================================================
-# SAVE DATA
+# LOCAL STORAGE
 # ============================================================
 
 
-def save_stock_data(ticker, dataframe):
+def save_stock_data(
+
+    ticker,
+
+    dataframe
+
+):
 
 
     try:
 
 
-        filepath = f"{DATA_FOLDER}/{ticker}.csv"
+        filepath = (
+
+            f"{DATA_FOLDER}/{ticker}.csv"
+
+        )
+
 
 
         dataframe.to_csv(
@@ -37,12 +64,13 @@ def save_stock_data(ticker, dataframe):
         )
 
 
+
     except Exception as error:
 
 
         print(
 
-            "Save error:",
+            "Save data error:",
 
             error
 
@@ -50,18 +78,23 @@ def save_stock_data(ticker, dataframe):
 
 
 
-# ============================================================
-# LOAD SAVED DATA
-# ============================================================
 
 
-def load_saved_data(ticker):
+def load_saved_data(
+
+    ticker
+
+):
 
 
     try:
 
 
-        filepath = f"{DATA_FOLDER}/{ticker}.csv"
+        filepath = (
+
+            f"{DATA_FOLDER}/{ticker}.csv"
+
+        )
 
 
 
@@ -72,14 +105,15 @@ def load_saved_data(ticker):
 
 
 
-        data = pd.read_csv(
+        dataframe = pd.read_csv(
 
             filepath
 
         )
 
 
-        return data
+
+        return dataframe
 
 
 
@@ -88,11 +122,12 @@ def load_saved_data(ticker):
 
         print(
 
-            "Load error:",
+            "Load data error:",
 
             error
 
         )
+
 
 
         return pd.DataFrame()
@@ -104,11 +139,25 @@ def load_saved_data(ticker):
 # ============================================================
 
 
-def add_indicators(data):
+def add_indicators(
+
+    data
+
+):
 
 
     data = data.copy()
 
+
+
+    if "Close" not in data.columns:
+
+
+        return pd.DataFrame()
+
+
+
+    # Daily return
 
 
     data["Return"] = (
@@ -121,11 +170,18 @@ def add_indicators(data):
 
 
 
+    # Moving averages
+
+
     data["SMA20"] = (
 
         data["Close"]
 
-        .rolling(20)
+        .rolling(
+
+            window=20
+
+        )
 
         .mean()
 
@@ -137,7 +193,11 @@ def add_indicators(data):
 
         data["Close"]
 
-        .rolling(50)
+        .rolling(
+
+            window=50
+
+        )
 
         .mean()
 
@@ -145,7 +205,16 @@ def add_indicators(data):
 
 
 
-    delta = data["Close"].diff()
+    # RSI
+
+
+    delta = (
+
+        data["Close"]
+
+        .diff()
+
+    )
 
 
 
@@ -169,7 +238,11 @@ def add_indicators(data):
 
         gain
 
-        .rolling(14)
+        .rolling(
+
+            window=14
+
+        )
 
         .mean()
 
@@ -181,7 +254,11 @@ def add_indicators(data):
 
         loss
 
-        .rolling(14)
+        .rolling(
+
+            window=14
+
+        )
 
         .mean()
 
@@ -189,7 +266,19 @@ def add_indicators(data):
 
 
 
-    rs = avg_gain / avg_loss
+    rs = (
+
+        avg_gain /
+
+        avg_loss.replace(
+
+            0,
+
+            np.nan
+
+        )
+
+    )
 
 
 
@@ -201,7 +290,13 @@ def add_indicators(data):
 
             100 /
 
-            (1 + rs)
+            (
+
+                1 +
+
+                rs
+
+            )
 
         )
 
@@ -209,16 +304,26 @@ def add_indicators(data):
 
 
 
+    # Volatility
+
+
     data["Volatility"] = (
 
         data["Return"]
 
-        .rolling(20)
+        .rolling(
+
+            window=20
+
+        )
 
         .std()
 
     )
 
+
+
+    # Momentum
 
 
     data["Momentum"] = (
@@ -239,6 +344,9 @@ def add_indicators(data):
 
 
 
+    # Volume movement
+
+
     if "Volume" in data.columns:
 
 
@@ -251,11 +359,10 @@ def add_indicators(data):
         )
 
 
-
-    return data
-
+    else:
 
 
+        data["Volume_Change"] = 0
 # ============================================================
 # HISTORICAL MARKET DATA
 # ============================================================
@@ -269,7 +376,11 @@ def add_indicators(data):
 
 )
 
-def get_stock_data(ticker):
+def get_stock_data(
+
+    ticker
+
+):
 
 
     url = (
@@ -291,13 +402,7 @@ def get_stock_data(ticker):
 
             url,
 
-            headers={
-
-                "User-Agent":
-
-                "Mozilla/5.0"
-
-            },
+            headers=YAHOO_HEADERS,
 
             timeout=15
 
@@ -305,17 +410,43 @@ def get_stock_data(ticker):
 
 
 
+        if response.status_code != 200:
+
+
+            saved = load_saved_data(
+
+                ticker
+
+            )
+
+
+            return saved
+
+
+
         json_data = response.json()
 
 
 
-        result = (
+        chart = (
 
             json_data
 
-            .get("chart", {})
+            .get(
 
-            .get("result")
+                "chart",
+
+                {}
+
+            )
+
+        )
+
+
+
+        result = chart.get(
+
+            "result"
 
         )
 
@@ -347,22 +478,79 @@ def get_stock_data(ticker):
 
 
 
-        quote = (
+        indicators = (
 
             result
 
-            .get("indicators", {})
+            .get(
 
-            .get("quote", [{}])[0]
+                "indicators",
+
+                {}
+
+            )
 
         )
+
+
+
+        quote = (
+
+            indicators
+
+            .get(
+
+                "quote",
+
+                [{}]
+
+            )[0]
+
+        )
+
+
+
+        closes = quote.get(
+
+            "close"
+
+        )
+
+
+
+        volumes = quote.get(
+
+            "volume"
+
+        )
+
+
+
+        if (
+
+            timestamps is None
+
+            or
+
+            closes is None
+
+        ):
+
+
+            saved = load_saved_data(
+
+                ticker
+
+            )
+
+
+            return saved
 
 
 
         dataframe = pd.DataFrame(
 
             {
-
 
                 "Date":
 
@@ -378,22 +566,13 @@ def get_stock_data(ticker):
 
                 "Close":
 
-                quote.get(
-
-                    "close"
-
-                ),
+                closes,
 
 
 
                 "Volume":
 
-                quote.get(
-
-                    "volume"
-
-                )
-
+                volumes
 
             }
 
@@ -405,9 +584,31 @@ def get_stock_data(ticker):
 
             dataframe
 
-            .dropna()
+            .dropna(
+
+                subset=[
+
+                    "Close"
+
+                ]
+
+            )
 
         )
+
+
+
+        if dataframe.empty:
+
+
+            saved = load_saved_data(
+
+                ticker
+
+            )
+
+
+            return saved
 
 
 
@@ -438,14 +639,15 @@ def get_stock_data(ticker):
 
         print(
 
-            "Market data error:",
+            "Historical data error:",
 
             error
 
         )
 
 
-        return load_saved_data(
+
+        saved = load_saved_data(
 
             ticker
 
@@ -453,10 +655,9 @@ def get_stock_data(ticker):
 
 
 
-
-
+        return saved
 # ============================================================
-# LIVE PRICE WITH DAILY CHANGE
+# LIVE MARKET DATA
 # ============================================================
 
 
@@ -468,7 +669,11 @@ def get_stock_data(ticker):
 
 )
 
-def get_live_price(ticker):
+def get_live_price(
+
+    ticker
+
+):
 
 
     try:
@@ -488,13 +693,7 @@ def get_live_price(ticker):
 
             url,
 
-            headers={
-
-                "User-Agent":
-
-                "Mozilla/5.0"
-
-            },
+            headers=YAHOO_HEADERS,
 
             timeout=10
 
@@ -502,17 +701,34 @@ def get_live_price(ticker):
 
 
 
-        data = response.json()
+        if response.status_code != 200:
+
+
+            return None
+
+
+
+        json_data = response.json()
 
 
 
         result = (
 
-            data
+            json_data
 
-            .get("chart", {})
+            .get(
 
-            .get("result")
+                "chart",
+
+                {}
+
+            )
+
+            .get(
+
+                "result"
+
+            )
 
         )
 
@@ -551,6 +767,40 @@ def get_live_price(ticker):
 
 
 
+        day_high = meta.get(
+
+            "regularMarketDayHigh"
+
+        )
+
+
+
+        day_low = meta.get(
+
+            "regularMarketDayLow"
+
+        )
+
+
+
+        volume = meta.get(
+
+            "regularMarketVolume"
+
+        )
+
+
+
+        market_state = meta.get(
+
+            "marketState",
+
+            "UNKNOWN"
+
+        )
+
+
+
         if current_price is None:
 
 
@@ -558,10 +808,10 @@ def get_live_price(ticker):
 
 
 
-        if previous_close:
+        if previous_close is not None:
 
 
-            change_amount = (
+            change = (
 
                 current_price -
 
@@ -573,7 +823,7 @@ def get_live_price(ticker):
 
             change_percent = (
 
-                change_amount /
+                change /
 
                 previous_close
 
@@ -584,7 +834,7 @@ def get_live_price(ticker):
         else:
 
 
-            change_amount = 0
+            change = 0
 
 
             change_percent = 0
@@ -592,6 +842,12 @@ def get_live_price(ticker):
 
 
         return {
+
+
+            "ticker":
+
+            ticker,
+
 
 
             "price":
@@ -602,13 +858,59 @@ def get_live_price(ticker):
 
             "change":
 
-            float(change_amount),
+            float(change),
 
 
 
             "change_percent":
 
-            float(change_percent)
+            float(change_percent),
+
+
+
+            "previous_close":
+
+            float(previous_close)
+
+            if previous_close
+
+            else None,
+
+
+
+            "day_high":
+
+            float(day_high)
+
+            if day_high
+
+            else None,
+
+
+
+            "day_low":
+
+            float(day_low)
+
+            if day_low
+
+            else None,
+
+
+
+            "volume":
+
+            int(volume)
+
+            if volume
+
+            else None,
+
+
+
+            "market_state":
+
+            market_state
 
         }
 
@@ -619,7 +921,7 @@ def get_live_price(ticker):
 
         print(
 
-            "Live price error:",
+            "Live market data error:",
 
             error
 
@@ -627,3 +929,346 @@ def get_live_price(ticker):
 
 
         return None
+# ============================================================
+# COMPANY INFORMATION
+# ============================================================
+
+
+@st.cache_data(
+
+    ttl=86400,
+
+    max_entries=100
+
+)
+
+def get_company_info(
+
+    ticker
+
+):
+
+
+    try:
+
+
+        url = (
+
+            f"https://query1.finance.yahoo.com/"
+
+            f"v10/finance/quoteSummary/"
+
+            f"{ticker}"
+
+            f"?modules=assetProfile"
+
+        )
+
+
+
+        response = requests.get(
+
+            url,
+
+            headers=YAHOO_HEADERS,
+
+            timeout=10
+
+        )
+
+
+
+        if response.status_code != 200:
+
+
+            return {
+
+
+                "name":
+
+                ticker,
+
+
+
+                "sector":
+
+                "Unknown",
+
+
+
+                "industry":
+
+                "Unknown"
+
+            }
+
+
+
+        data = response.json()
+
+
+
+        profile = (
+
+            data
+
+            .get(
+
+                "quoteSummary",
+
+                {}
+
+            )
+
+            .get(
+
+                "result",
+
+                [{}]
+
+            )[0]
+
+            .get(
+
+                "assetProfile",
+
+                {}
+
+            )
+
+        )
+
+
+
+        return {
+
+
+            "name":
+
+            profile.get(
+
+                "longName",
+
+                ticker
+
+            ),
+
+
+
+            "sector":
+
+            profile.get(
+
+                "sector",
+
+                "Unknown"
+
+            ),
+
+
+
+            "industry":
+
+            profile.get(
+
+                "industry",
+
+                "Unknown"
+
+            )
+
+        }
+
+
+
+    except Exception as error:
+
+
+        print(
+
+            "Company info error:",
+
+            error
+
+        )
+
+
+        return {
+
+
+            "name":
+
+            ticker,
+
+
+
+            "sector":
+
+            "Unknown",
+
+
+
+            "industry":
+
+            "Unknown"
+
+        }
+
+
+
+
+
+# ============================================================
+# MARKET STATUS
+# ============================================================
+
+
+def get_market_status(
+
+    live_data
+
+):
+
+
+    if live_data is None:
+
+
+        return "DATA UNAVAILABLE"
+
+
+
+    state = live_data.get(
+
+        "market_state",
+
+        "UNKNOWN"
+
+    )
+
+
+
+    states = {
+
+
+        "REGULAR":
+
+        "MARKET OPEN",
+
+
+
+        "PRE":
+
+        "PRE-MARKET",
+
+
+
+        "POST":
+
+        "AFTER HOURS",
+
+
+
+        "CLOSED":
+
+        "MARKET CLOSED"
+
+    }
+
+
+
+    return states.get(
+
+        state,
+
+        state
+
+    )
+
+
+
+
+
+# ============================================================
+# SAFE NUMBER FORMATTERS
+# ============================================================
+
+
+def format_price(
+
+    value
+
+):
+
+
+    if value is None:
+
+
+        return "N/A"
+
+
+
+    return f"${value:,.2f}"
+
+
+
+
+
+def format_percent(
+
+    value
+
+):
+
+
+    if value is None:
+
+
+        return "N/A"
+
+
+
+    return f"{value:+.2f}%"
+
+
+
+
+
+def format_volume(
+
+    value
+
+):
+
+
+    if value is None:
+
+
+        return "N/A"
+
+
+
+    if value >= 1_000_000_000:
+
+
+        return f"{value / 1_000_000_000:.2f}B"
+
+
+
+    if value >= 1_000_000:
+
+
+        return f"{value / 1_000_000:.2f}M"
+
+
+
+    if value >= 1_000:
+
+
+        return f"{value / 1_000:.2f}K"
+
+
+
+    return str(value)
+
+
+    return data
