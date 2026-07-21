@@ -770,26 +770,31 @@ with header2:
 
 with header3:
 
+    if live_data:
+
+        daily_change = live_data.get(
+            "change_percent",
+            0
+        )
+
+        if daily_change >= 0:
+
+            change_display = f"🟢 +{daily_change:.2f}%"
+
+        else:
+
+            change_display = f"🔴 {daily_change:.2f}%"
+
+    else:
+
+        change_display = "N/A"
+
 
     st.metric(
 
         "Daily Change",
 
-        format_percent(
-
-            live_data.get(
-
-                "change_percent",
-
-                0
-
-            )
-
-        )
-
-        if live_data
-
-        else "N/A"
+        change_display
 
     )
 
