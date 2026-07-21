@@ -1745,3 +1745,104 @@ if __name__ == "__main__":
         )
 
     )
+# ============================================================
+# STOCK SEARCH
+# ============================================================
+
+
+@st.cache_data(
+    ttl=3600,
+    max_entries=500
+)
+def search_stocks(query):
+
+    query = query.strip()
+
+    if len(query) < 1:
+
+        return []
+
+
+    url = (
+
+        "https://query1.finance.yahoo.com/"
+
+        f"v1/finance/search?q={query}"
+
+    )
+
+
+    try:
+
+        data = yahoo_request(url)
+
+
+        if not data:
+
+            return []
+
+
+        results = []
+
+
+        quotes = data.get(
+            "quotes",
+            []
+        )
+
+
+        for item in quotes:
+
+            symbol = item.get(
+                "symbol"
+            )
+
+
+            name = (
+
+                item.get(
+                    "longname"
+                )
+
+                or
+
+                item.get(
+                    "shortname"
+                )
+
+            )
+
+
+            if symbol and name:
+
+                results.append(
+
+                    {
+
+                        "label":
+                        f"{name} ({symbol})",
+
+
+                        "symbol":
+                        symbol,
+
+
+                        "name":
+                        name
+
+                    }
+
+                )
+
+
+        return results[:10]
+
+
+    except Exception as error:
+
+        print(
+            "Stock search error:",
+            error
+        )
+
+        return []
