@@ -4,10 +4,13 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import datetime
 
+
 from streamlit_autorefresh import st_autorefresh
+
 
 from qiskit import QuantumCircuit
 from qiskit_aer import AerSimulator
+
 
 from data_provider import (
     get_stock_data,
@@ -36,7 +39,7 @@ st.set_page_config(
 
 
 # ============================================================
-# SESSION STATE STORAGE
+# SESSION STATE
 # ============================================================
 
 
@@ -52,6 +55,12 @@ if "forecast_settings" not in st.session_state:
 
 
 
+if "forecast_time" not in st.session_state:
+
+    st.session_state.forecast_time = None
+
+
+
 # ============================================================
 # LIVE DASHBOARD REFRESH
 # ============================================================
@@ -61,7 +70,7 @@ st_autorefresh(
 
     interval=15000,
 
-    key="market_refresh"
+    key="live_market_refresh"
 
 )
 
@@ -77,21 +86,6 @@ st.markdown(
     """
 
 <style>
-
-.metric-card {
-
-    background-color: #f8f9fa;
-
-    border-left: 5px solid #1f77b4;
-
-    padding: 15px;
-
-    border-radius: 5px;
-
-    margin-bottom: 10px;
-
-}
-
 
 .stApp {
 
@@ -129,7 +123,7 @@ st.markdown(
 
 This platform combines quantum probability sampling,
 
-financial statistics, technical indicators,
+market statistics, technical indicators,
 
 and risk analytics to estimate future price distributions.
 
@@ -210,7 +204,7 @@ selected_ticker = st.sidebar.selectbox(
 
     "Select Asset:",
 
-    options=popular_tickers,
+    popular_tickers,
 
     index=0,
 
@@ -260,7 +254,7 @@ num_qubits = st.sidebar.slider(
 
     min_value=3,
 
-    max_value=7,
+    max_value=6,
 
     value=5
 
@@ -311,7 +305,7 @@ run_button = st.sidebar.button(
 
 
 # ============================================================
-# LIVE PRICE
+# LIVE PRICE DISPLAY
 # ============================================================
 
 
@@ -370,14 +364,14 @@ with price_col2:
 
 st.caption(
 
-    f"Last updated: {datetime.datetime.now().strftime('%H:%M:%S')}"
+    f"Market price updated: {datetime.datetime.now().strftime('%H:%M:%S')}"
 
 )
 
 
 
 # ============================================================
-# MARKET DATA
+# HISTORICAL MARKET DATA
 # ============================================================
 
 
@@ -392,21 +386,31 @@ st.caption(
 def load_market_data(ticker):
 
 
-    data = get_stock_data(
-
-        ticker
-
-    )
+    try:
 
 
-    if data is None:
+        data = get_stock_data(
+
+            ticker
+
+        )
+
+
+        if data is None:
+
+
+            return pd.DataFrame()
+
+
+
+        return data.dropna()
+
+
+
+    except Exception:
 
 
         return pd.DataFrame()
-
-
-
-    return data.dropna()
 
 
 
@@ -423,12 +427,9 @@ if market_data.empty:
 
     st.error(
 
-        "No market data found for this stock."
+        "No historical market data available."
 
     )
-
-
-    st.stop()
 # ============================================================
 # QUANTUM FORECAST ENGINE
 # ============================================================
@@ -445,6 +446,8 @@ if market_data.empty:
 def run_quantum_engine(
 
     market_data,
+
+    live_price,
 
     days,
 
@@ -476,7 +479,7 @@ def run_quantum_engine(
 
         raise ValueError(
 
-            "Not enough historical price data."
+            "Not enough historical data."
 
         )
 
@@ -494,103 +497,122 @@ def run_quantum_engine(
 
 
 
-    S0 = float(
+    # ========================================================
+    # STARTING PRICE
+    # ========================================================
 
-        prices.iloc[-1]
 
-    )
+    if live_price is not None:
+
+
+        S0 = float(live_price)
+
+
+    else:
+
+
+        S0 = float(prices.iloc[-1])
 
 
 
     # ========================================================
-    # MARKET FEATURES
+    # SAFE FEATURE EXTRACTION
     # ========================================================
 
 
-    rsi = float(
-
-        data["RSI"]
-
-        .dropna()
-
-        .iloc[-1]
-
-    )
+    def get_latest_value(column, default):
 
 
-    momentum = float(
-
-        data["Momentum"]
-
-        .dropna()
-
-        .iloc[-1]
-
-    )
+        if column not in data.columns:
 
 
-    volatility = float(
-
-        data["Volatility"]
-
-        .dropna()
-
-        .iloc[-1]
-
-    )
-
-
-    sma20 = float(
-
-        data["SMA20"]
-
-        .dropna()
-
-        .iloc[-1]
-
-    )
-
-
-    sma50 = float(
-
-        data["SMA50"]
-
-        .dropna()
-
-        .iloc[-1]
-
-    )
-
-
-    volume_change = 0
+            return default
 
 
 
-    if "Volume_Change" in data.columns:
+        values = (
 
-
-        volume_series = (
-
-            data["Volume_Change"]
+            data[column]
 
             .dropna()
 
         )
 
 
-        if not volume_series.empty:
+
+        if values.empty:
 
 
-            volume_change = float(
+            return default
 
-                volume_series.iloc[-1]
 
-            )
+
+        return float(values.iloc[-1])
+
+
+
+    rsi = get_latest_value(
+
+        "RSI",
+
+        50
+
+    )
+
+
+
+    momentum = get_latest_value(
+
+        "Momentum",
+
+        0
+
+    )
+
+
+
+    volatility_indicator = get_latest_value(
+
+        "Volatility",
+
+        returns.std()
+
+    )
+
+
+
+    sma20 = get_latest_value(
+
+        "SMA20",
+
+        S0
+
+    )
+
+
+
+    sma50 = get_latest_value(
+
+        "SMA50",
+
+        S0
+
+    )
+
+
+
+    volume_change = get_latest_value(
+
+        "Volume_Change",
+
+        0
+
+    )
 
 
 
     # ========================================================
-    # BASE MARKET STATISTICS
+    # MARKET STATISTICS
     # ========================================================
 
 
@@ -599,6 +621,7 @@ def run_quantum_engine(
         returns.mean()
 
     )
+
 
 
     sigma = float(
@@ -688,7 +711,7 @@ def run_quantum_engine(
 
 
     # ========================================================
-    # PRICE DISTRIBUTION
+    # PRICE RANGE GENERATION
     # ========================================================
 
 
@@ -786,61 +809,81 @@ def run_quantum_engine(
 
 
 
-    distribution = np.exp(
+    # ========================================================
+    # PROBABILITY DISTRIBUTION
+    # ========================================================
 
-        -(
 
-            (
-
-                np.log(
-
-                    price_grid /
-
-                    S0
-
-                )
-
-                -
-
-                drift
-
-            )
-
-            ** 2
-
-        )
-
-        /
+    exponent = -(
 
         (
 
-            2 *
+            np.log(
 
-            sigma ** 2 *
+                price_grid /
 
-            dt
+                S0
+
+            )
+
+            -
+
+            drift
 
         )
 
+        ** 2
+
+    ) / (
+
+        2 *
+
+        sigma ** 2 *
+
+        dt
+
     )
 
 
 
-    distribution = np.maximum(
+    distribution = np.exp(
 
-        distribution,
-
-        0
+        exponent
 
     )
 
 
 
-    distribution /= np.sum(
+    distribution = np.nan_to_num(
 
         distribution
 
     )
+
+
+
+    total_probability = np.sum(
+
+        distribution
+
+    )
+
+
+
+    if total_probability <= 0:
+
+
+        distribution = np.ones(
+
+            states
+
+        )
+
+        total_probability = states
+
+
+
+    distribution /= total_probability
 
 
 
@@ -859,11 +902,7 @@ def run_quantum_engine(
 
     circuit.initialize(
 
-        np.sqrt(
-
-            distribution
-
-        ),
+        np.sqrt(distribution),
 
         range(qubits)
 
@@ -930,12 +969,26 @@ def run_quantum_engine(
 
 
 
-    quantum_probs /= np.sum(
+    probability_sum = np.sum(
 
         quantum_probs
 
     )
-    # ============================================================
+
+
+
+    if probability_sum <= 0:
+
+
+        quantum_probs = distribution
+
+
+
+    else:
+
+
+        quantum_probs /= probability_sum
+# ============================================================
 # RISK CALCULATIONS
 # ============================================================
 
@@ -996,43 +1049,19 @@ def run_quantum_engine(
 
 
 
-    var_95_price = (
-
-        price_grid[var_index]
-
-    )
+    var_95_price = price_grid[var_index]
 
 
 
-    var_95_pct = (
-
-        pct_grid[var_index]
-
-    )
+    var_95_pct = pct_grid[var_index]
 
 
 
-    tail_prices = (
-
-        price_grid[
-
-            :var_index + 1
-
-        ]
-
-    )
+    tail_prices = price_grid[:var_index + 1]
 
 
 
-    tail_probs = (
-
-        quantum_probs[
-
-            :var_index + 1
-
-        ]
-
-    )
+    tail_probs = quantum_probs[:var_index + 1]
 
 
 
@@ -1083,11 +1112,7 @@ def run_quantum_engine(
 
     prob_positive = np.sum(
 
-        quantum_probs[
-
-            pct_grid >= 0
-
-        ]
+        quantum_probs[pct_grid >= 0]
 
     ) * 100
 
@@ -1095,11 +1120,7 @@ def run_quantum_engine(
 
     prob_up_5 = np.sum(
 
-        quantum_probs[
-
-            pct_grid >= 5
-
-        ]
+        quantum_probs[pct_grid >= 5]
 
     ) * 100
 
@@ -1107,11 +1128,7 @@ def run_quantum_engine(
 
     prob_down_5 = np.sum(
 
-        quantum_probs[
-
-            pct_grid <= -5
-
-        ]
+        quantum_probs[pct_grid <= -5]
 
     ) * 100
 
@@ -1123,41 +1140,6 @@ def run_quantum_engine(
         "S0":
 
         S0,
-
-
-        "mu":
-
-        adjusted_mu,
-
-
-        "sigma":
-
-        sigma,
-
-
-        "ann_vol":
-
-        sigma * np.sqrt(252) * 100,
-
-
-        "price_grid":
-
-        price_grid,
-
-
-        "pct_grid":
-
-        pct_grid,
-
-
-        "quantum_probs":
-
-        quantum_probs,
-
-
-        "cdf":
-
-        cdf,
 
 
         "expected_price":
@@ -1205,9 +1187,34 @@ def run_quantum_engine(
         prob_down_5,
 
 
+        "price_grid":
+
+        price_grid,
+
+
+        "pct_grid":
+
+        pct_grid,
+
+
+        "quantum_probs":
+
+        quantum_probs,
+
+
+        "cdf":
+
+        cdf,
+
+
         "prices":
 
         prices,
+
+
+        "ann_vol":
+
+        sigma * np.sqrt(252) * 100,
 
 
         "rsi":
@@ -1239,7 +1246,7 @@ def run_quantum_engine(
 
 
 # ============================================================
-# RUN OR LOAD FORECAST
+# RUN FORECAST
 # ============================================================
 
 
@@ -1260,6 +1267,13 @@ current_settings = (
 if run_button:
 
 
+    fresh_live_price = get_live_price(
+
+        selected_ticker
+
+    )
+
+
     try:
 
 
@@ -1273,6 +1287,8 @@ if run_button:
             st.session_state.forecast_data = run_quantum_engine(
 
                 market_data,
+
+                fresh_live_price,
 
                 forecast_days,
 
@@ -1288,6 +1304,16 @@ if run_button:
 
 
 
+            st.session_state.forecast_time = (
+
+                datetime.datetime.now()
+
+                .strftime("%H:%M:%S")
+
+            )
+
+
+
     except Exception as error:
 
 
@@ -1298,16 +1324,16 @@ if run_button:
         )
 
 
-
         st.stop()
 
 
 
-if (
+# ============================================================
+# INITIAL STATE CHECK
+# ============================================================
 
-    st.session_state.forecast_data is None
 
-):
+if st.session_state.forecast_data is None:
 
 
     st.info(
@@ -1321,11 +1347,18 @@ if (
 
 
 
-# Keep forecast visible after refresh
+# ============================================================
+# SETTINGS CHANGE DETECTION
+# ============================================================
+
 
 if (
 
-    st.session_state.forecast_settings != current_settings
+    st.session_state.forecast_settings
+
+    !=
+
+    current_settings
 
 ):
 
@@ -1357,7 +1390,7 @@ col1, col2, col3, col4, col5 = st.columns(5)
 
 col1.metric(
 
-    "Current Price",
+    "Forecast Starting Price",
 
     f"${data['S0']:.2f}"
 
@@ -1407,68 +1440,9 @@ col5.metric(
 
 
 
-# ============================================================
-# MARKET FEATURES
-# ============================================================
+st.caption(
 
-
-st.divider()
-
-
-
-st.subheader(
-
-    "Market Factors"
-
-)
-
-
-
-factor1, factor2, factor3, factor4 = st.columns(4)
-
-
-
-factor1.metric(
-
-    "RSI",
-
-    f"{data['rsi']:.1f}"
-
-)
-
-
-
-factor2.metric(
-
-    "Momentum",
-
-    f"{data['momentum'] * 100:.2f}%"
-
-)
-
-
-
-factor3.metric(
-
-    "Moving Average",
-
-    "Bullish"
-
-    if data["sma20"] > data["sma50"]
-
-    else
-
-    "Bearish"
-
-)
-
-
-
-factor4.metric(
-
-    "Volume Change",
-
-    f"{data['volume_change'] * 100:.2f}%"
+    f"Forecast generated at {st.session_state.forecast_time}"
 
 )
 
@@ -1779,7 +1753,7 @@ with tab2:
 
         linestyle="-",
 
-        label="Expected"
+        label="Expected Return"
 
     )
 
@@ -1813,10 +1787,6 @@ with tab2:
 
 
 
-    ax2.legend()
-
-
-
     ax2.grid(
 
         True,
@@ -1824,6 +1794,10 @@ with tab2:
         alpha=0.25
 
     )
+
+
+
+    ax2.legend()
 
 
 
@@ -1955,7 +1929,7 @@ with tab3:
 Asset: {selected_ticker}
 
 
-Current Price:
+Starting Price:
 
 ${data['S0']:.2f}
 
@@ -1975,7 +1949,7 @@ Expected Return:
 {data['expected_pct']:+.2f}%
 
 
-Positive Probability:
+Positive Return Probability:
 
 {data['prob_positive']:.1f}%
 
@@ -2071,7 +2045,7 @@ with tab4:
 
 
 # ============================================================
-# HISTORICAL PRICE
+# HISTORICAL DATA
 # ============================================================
 
 
@@ -2173,5 +2147,4 @@ Forecast outputs are statistical estimates and are not financial advice.
 
 )
 
-
-prices = market_data["Close"]
+    st.stop()
