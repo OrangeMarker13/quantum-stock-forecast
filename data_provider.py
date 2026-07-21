@@ -1763,156 +1763,91 @@ def get_stock_data(ticker):
 
 
 @st.cache_data(
-
     ttl=15,
-
     max_entries=250
-
 )
-
 def get_live_price(ticker):
-
 
     ticker = ticker.upper().strip()
 
-
-
     chart = fetch_yahoo_chart(
-
         ticker,
-
-        period="1d"
-
+        period="5d"
     )
 
-
-
     if chart is None:
-
-
         return None
-
-
-
 
     try:
 
-
         meta = chart.get(
-
             "meta",
-
             {}
-
         )
-
-
 
         price = meta.get(
-
             "regularMarketPrice"
-
         )
-
-
 
         previous = meta.get(
-
             "previousClose"
-
         )
 
 
-
-        if price is None:
-
-
-            regular = chart.get(
-
+        quote = (
+            chart
+            .get(
                 "indicators",
-
                 {}
-
             )
+            .get(
+                "quote",
+                [{}]
+            )[0]
+        )
 
 
-            closes = (
-
-                regular
-
-                .get(
-
-                    "quote",
-
-                    [{}]
-
-                )[0]
-
-                .get(
-
-                    "close",
-
-                    []
-
-                )
-
-            )
+        closes = quote.get(
+            "close",
+            []
+        )
 
 
-            if closes:
+        closes = [
+            x for x in closes
+            if x is not None
+        ]
 
 
-                price = closes[-1]
+        if price is None and closes:
 
+            price = closes[-1]
+
+
+        if previous is None and len(closes) >= 2:
+
+            previous = closes[-2]
 
 
         if price is None:
-
 
             return None
 
 
-
-        price = float(
-
-            price
-
-        )
-
+        price = float(price)
 
 
         if previous:
 
-
-            previous = float(
-
-                previous
-
-            )
-
+            previous = float(previous)
 
             change = (
-
-                (
-
-                    price
-
-                    -
-
-                    previous
-
-                )
-
+                (price - previous)
                 /
-
                 previous
-
             ) * 100
 
-
-
         else:
-
 
             change = 0
 
@@ -1920,66 +1855,33 @@ def get_live_price(ticker):
 
         return {
 
+            "price": price,
 
-            "price":
+            "previous_close": previous,
 
-            price,
+            "change_percent": change,
 
-
-            "previous_close":
-
-            previous,
-
-
-            "change_percent":
-
-            change,
-
-
-            "currency":
-
-            meta.get(
-
+            "currency": meta.get(
                 "currency",
-
                 "USD"
-
             ),
 
-
-            "exchange":
-
-            meta.get(
-
+            "exchange": meta.get(
                 "exchangeName",
-
                 "Unknown"
-
             )
-
 
         }
 
 
-
-
     except Exception as error:
 
-
         print(
-
             "Live price error:",
-
             error
-
         )
 
-
         return None
-
-
-
-
 
 # ============================================================
 # COMPANY INFORMATION
