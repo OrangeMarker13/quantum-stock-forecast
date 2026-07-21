@@ -384,9 +384,9 @@ if qubits == 6 and shots > 3000:
 
 run_button = st.sidebar.button(
 
-    "Run Quantum Analysis",
+    "Run Quantum Analysis"
 
-    type="primary"
+)
     # ============================================================
 # LIVE MARKET HEADER
 # ============================================================
