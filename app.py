@@ -224,6 +224,7 @@ def get_stock_data(ticker):
         .dropna()
         .astype(float)
     )
+    return close_prices
 # ============================================================
 # QUANTUM ENGINE
 # ============================================================
@@ -1192,4 +1193,4 @@ Quantum Stock Forecast is an educational research model.
 Forecast outputs are statistical estimates and are not financial advice.
 """
 )
-return close_prices
+
