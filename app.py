@@ -269,24 +269,50 @@ popular_assets = [
 
 ]
 
+search_term = st.sidebar.text_input(
 
+    "Search Stock Symbol",
 
-
-
-ticker = st.sidebar.selectbox(
-
-    "Asset",
-
-    popular_assets
+    value="AAPL"
 
 )
 
 
-
-ticker = ticker.upper().strip()
-
+search_term = search_term.upper().strip()
 
 
+
+filtered_assets = [
+
+    stock
+
+    for stock in popular_assets
+
+    if search_term in stock
+
+]
+
+
+
+if filtered_assets:
+
+
+    selected_suggestion = st.sidebar.selectbox(
+
+        "Suggestions",
+
+        filtered_assets
+
+    )
+
+
+    ticker = selected_suggestion
+
+
+else:
+
+
+    ticker = search_term
 
 
 forecast_days = st.sidebar.selectbox(
