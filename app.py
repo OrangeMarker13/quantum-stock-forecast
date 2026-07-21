@@ -37,36 +37,35 @@ from prediction_memory import (
 )
 
 # ============================================================
-# PREMIUM QUANTUM TERMINAL UI ENGINE
+# QUANTUM TERMINAL PREMIUM UI ENGINE
 # PLACE AFTER IMPORTS
 # ============================================================
 
-import streamlit as st
-
-
-def inject_premium_ui():
+def apply_quantum_ui():
 
     st.markdown(
     """
     <style>
 
 
-    /* =====================================================
-       GLOBAL BACKGROUND
-    ===================================================== */
+    /* ================================
+       GLOBAL APP BACKGROUND
+    ================================= */
+
 
     .stApp {
 
         background:
+
         radial-gradient(
-            circle at 10% 10%,
-            rgba(34,211,238,0.20),
+            circle at 15% 10%,
+            rgba(34,211,238,0.22),
             transparent 35%
         ),
 
         radial-gradient(
-            circle at 90% 90%,
-            rgba(168,85,247,0.18),
+            circle at 85% 90%,
+            rgba(139,92,246,0.20),
             transparent 40%
         ),
 
@@ -77,15 +76,15 @@ def inject_premium_ui():
             #020617
         );
 
-        color:#e2e8f0;
+        color:#e5e7eb;
 
     }
 
 
 
-    /* =====================================================
-       MAIN TEXT
-    ===================================================== */
+    /* ================================
+       TYPOGRAPHY
+    ================================= */
 
 
     h1 {
@@ -97,16 +96,23 @@ def inject_premium_ui():
         letter-spacing:-1px;
 
         text-shadow:
-        0 0 15px rgba(34,211,238,0.45);
+
+        0 0 20px
+
+        rgba(34,211,238,.55);
 
     }
+
 
 
     h2,h3 {
 
         color:#e0f2fe !important;
 
+        font-weight:800;
+
     }
+
 
 
     p {
@@ -117,9 +123,10 @@ def inject_premium_ui():
 
 
 
-    /* =====================================================
+
+    /* ================================
        SIDEBAR
-    ===================================================== */
+    ================================= */
 
 
     section[data-testid="stSidebar"] {
@@ -138,29 +145,28 @@ def inject_premium_ui():
 
         1px solid
 
-        rgba(34,211,238,0.25);
+        rgba(34,211,238,.3);
+
 
     }
 
 
 
-    section[data-testid="stSidebar"] h1 {
+    section[data-testid="stSidebar"] * {
 
-        color:#22d3ee !important;
+        color:#e2e8f0;
 
     }
 
 
 
-    /* =====================================================
+
+    /* ================================
        BUTTONS
-    ===================================================== */
+    ================================= */
 
 
     .stButton button {
-
-
-        width:100%;
 
 
         background:
@@ -178,29 +184,30 @@ def inject_premium_ui():
         border:none;
 
 
-        border-radius:14px;
+        border-radius:16px;
 
 
-        padding:12px;
+        padding:12px 18px;
 
 
-        font-weight:800;
+        font-weight:900;
 
 
         font-size:16px;
 
 
-        transition:all .25s ease;
-
-
         box-shadow:
 
-        0 0 20px
+        0 0 25px
 
-        rgba(34,211,238,0.35);
+        rgba(34,211,238,.35);
+
+
+        transition:.25s ease;
 
 
     }
+
 
 
 
@@ -209,25 +216,24 @@ def inject_premium_ui():
 
         transform:
 
-        translateY(-3px)
-
-        scale(1.02);
+        translateY(-4px);
 
 
         box-shadow:
 
-        0 0 35px
+        0 0 45px
 
-        rgba(139,92,246,0.65);
+        rgba(139,92,246,.7);
 
 
     }
 
 
 
-    /* =====================================================
+
+    /* ================================
        METRIC CARDS
-    ===================================================== */
+    ================================= */
 
 
     div[data-testid="metric-container"] {
@@ -249,7 +255,7 @@ def inject_premium_ui():
         rgba(34,211,238,.25);
 
 
-        border-radius:18px;
+        border-radius:20px;
 
 
         padding:18px;
@@ -257,7 +263,7 @@ def inject_premium_ui():
 
         box-shadow:
 
-        0 10px 35px
+        0 15px 40px
 
         rgba(0,0,0,.35);
 
@@ -269,6 +275,7 @@ def inject_premium_ui():
 
 
 
+
     div[data-testid="metric-container"]:hover {
 
 
@@ -277,14 +284,12 @@ def inject_premium_ui():
         translateY(-5px);
 
 
-        border-color:
-
-        #22d3ee;
+        border-color:#22d3ee;
 
 
         box-shadow:
 
-        0 0 30px
+        0 0 35px
 
         rgba(34,211,238,.35);
 
@@ -294,9 +299,9 @@ def inject_premium_ui():
 
 
 
-    /* =====================================================
-       CUSTOM METRIC BOX
-    ===================================================== */
+    /* ================================
+       CUSTOM BOXES
+    ================================= */
 
 
     .metric-box {
@@ -304,11 +309,10 @@ def inject_premium_ui():
 
         background:
 
-
         linear-gradient(
             145deg,
-            rgba(15,23,42,.9),
-            rgba(30,41,59,.95)
+            #111827,
+            #1e293b
         );
 
 
@@ -316,10 +320,10 @@ def inject_premium_ui():
 
         1px solid
 
-        rgba(56,189,248,.35);
+        rgba(34,211,238,.3);
 
 
-        border-radius:20px;
+        border-radius:22px;
 
 
         padding:20px;
@@ -330,7 +334,7 @@ def inject_premium_ui():
 
         box-shadow:
 
-        0 15px 40px
+        0 15px 45px
 
         rgba(0,0,0,.4);
 
@@ -362,9 +366,9 @@ def inject_premium_ui():
 
 
 
-    /* =====================================================
-       POSITIVE / NEGATIVE
-    ===================================================== */
+    /* ================================
+       GAINS / LOSSES
+    ================================= */
 
 
     .positive {
@@ -373,16 +377,18 @@ def inject_premium_ui():
         color:#22ff88 !important;
 
 
-        font-weight:900;
+        font-weight:900 !important;
 
 
         text-shadow:
 
-        0 0 12px
+        0 0 15px
 
-        rgba(34,255,136,.45);
+        rgba(34,255,136,.55);
+
 
     }
+
 
 
 
@@ -392,23 +398,24 @@ def inject_premium_ui():
         color:#ff5555 !important;
 
 
-        font-weight:900;
+        font-weight:900 !important;
 
 
         text-shadow:
 
-        0 0 12px
+        0 0 15px
 
-        rgba(255,85,85,.45);
+        rgba(255,85,85,.55);
+
 
     }
 
 
 
 
-    /* =====================================================
+    /* ================================
        TABS
-    ===================================================== */
+    ================================= */
 
 
     button[data-baseweb="tab"] {
@@ -416,29 +423,19 @@ def inject_premium_ui():
 
         background:
 
-        rgba(15,23,42,.7);
+        rgba(15,23,42,.75);
 
 
-        border-radius:12px;
+        border-radius:14px;
 
 
-        margin-right:6px;
+        margin-right:5px;
+
+
+        font-weight:800;
 
 
         color:#cbd5e1;
-
-
-        font-weight:700;
-
-
-    }
-
-
-
-    button[data-baseweb="tab"]:hover {
-
-
-        color:#22d3ee;
 
 
     }
@@ -465,23 +462,28 @@ def inject_premium_ui():
 
 
 
-    /* =====================================================
-       INPUT BOXES
-    ===================================================== */
+    /* ================================
+       INPUTS
+    ================================= */
 
 
     input {
 
 
-        background:
-
-        #020617 !important;
+        background:#020617 !important;
 
 
         color:white !important;
 
 
         border-radius:12px !important;
+
+
+        border:
+
+        1px solid
+
+        rgba(34,211,238,.25) !important;
 
 
     }
@@ -498,18 +500,15 @@ def inject_premium_ui():
 
 
 
-    /* =====================================================
-       DATAFRAMES
-    ===================================================== */
+    /* ================================
+       TABLES
+    ================================= */
 
 
     div[data-testid="stDataFrame"] {
 
 
-        border-radius:16px;
-
-
-        overflow:hidden;
+        border-radius:18px;
 
 
         border:
@@ -519,13 +518,47 @@ def inject_premium_ui():
         rgba(34,211,238,.25);
 
 
+        overflow:hidden;
+
+
     }
 
 
 
-    /* =====================================================
+    /* ================================
+       DOWNLOAD BUTTON
+    ================================= */
+
+
+    .stDownloadButton button {
+
+
+        background:
+
+        linear-gradient(
+            90deg,
+            #10b981,
+            #06b6d4
+        );
+
+
+        color:white;
+
+
+        border-radius:14px;
+
+
+        font-weight:800;
+
+
+    }
+
+
+
+
+    /* ================================
        DIVIDERS
-    ===================================================== */
+    ================================= */
 
 
     hr {
@@ -541,16 +574,44 @@ def inject_premium_ui():
 
 
 
-    /* =====================================================
-       SPINNER
-    ===================================================== */
+    /* ================================
+       ALERTS
+    ================================= */
 
 
-    div[data-testid="stSpinner"] {
+    div[data-testid="stAlert"] {
 
 
-        color:#22d3ee;
+        border-radius:16px;
 
+
+        border:
+
+        1px solid
+
+        rgba(34,211,238,.2);
+
+
+    }
+
+
+
+
+    /* ================================
+       REMOVE STREAMLIT BRANDING
+    ================================= */
+
+
+    #MainMenu {
+
+        visibility:hidden;
+
+    }
+
+
+    footer {
+
+        visibility:hidden;
 
     }
 
@@ -562,263 +623,7 @@ def inject_premium_ui():
     )
 
 
-
-inject_premium_ui()
-
-# ============================================================
-# STREAMLIT CONFIGURATION
-# ============================================================
-
-st.set_page_config(
-    page_title="Quantum Equity Research Terminal",
-    page_icon="⚛️",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
-
-
-# ============================================================
-# SESSION STATE
-# ============================================================
-
-DEFAULT_STATE = {
-
-    "started": False,
-
-    "forecast": None,
-
-    "forecast_settings": None,
-
-    "last_run": None,
-
-    "last_price": None,
-
-    "confidence_score": None,
-
-    "risk_score": None,
-
-    "market_regime": None,
-
-    "prediction_id": None
-
-}
-
-
-for key, value in DEFAULT_STATE.items():
-
-    if key not in st.session_state:
-
-        st.session_state[key] = value
-
-
-
-# ============================================================
-# AUTO REFRESH
-# ============================================================
-
-st_autorefresh(
-    interval=30000,
-    key="market_refresh"
-)
-
-
-
-# ============================================================
-# LANDING PAGE
-# ============================================================
-
-if not st.session_state.started:
-
-
-    st.markdown(
-        """
-        <div style="
-        text-align:center;
-        padding:55px 15px;
-        ">
-
-        <h1 style="font-size:52px;">
-        ⚛️ Quantum Equity Research Terminal
-        </h1>
-
-        <h3>
-        Adaptive Quantum Market Probability Engine
-        </h3>
-
-        <p style="
-        font-size:19px;
-        color:#b8c1d1;
-        ">
-
-        Multi-factor market forecasting using
-        historical behavior, risk analysis,
-        probability modeling, and quantum sampling.
-
-        </p>
-
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-
-    st.divider()
-
-
-    col1, col2, col3 = st.columns(3)
-
-
-    with col1:
-
-        st.markdown(
-            """
-            ### 📈 Market Intelligence
-
-            Technical indicators,
-            volatility,
-            momentum,
-            and market regimes.
-            """
-        )
-
-
-    with col2:
-
-        st.markdown(
-            """
-            ### ⚛️ Quantum Simulation
-
-            Probability states,
-            quantum encoding,
-            and scenario sampling.
-            """
-        )
-
-
-    with col3:
-
-        st.markdown(
-            """
-            ### 🧠 Forward Learning
-
-            Tracks prediction accuracy
-            without changing model weights.
-            """
-        )
-
-
-    st.divider()
-
-
-    if st.button(
-        "🚀 Start Quantum Simulation",
-        width="stretch"
-    ):
-
-        st.session_state.started = True
-
-        st.rerun()
-
-
-    st.stop()
-
-
-
-# ============================================================
-# PAGE STYLE
-# ============================================================
-
-st.markdown(
-"""
-<style>
-
-.stApp {
-
-background:
-
-radial-gradient(
-circle at top left,
-#172554,
-transparent 35%
-),
-
-radial-gradient(
-circle at bottom right,
-#3b0764,
-transparent 35%
-),
-
-#050816;
-
-}
-
-
-h1 {
-
-color:#22d3ee !important;
-
-}
-
-
-.metric-box {
-
-background:
-
-linear-gradient(
-145deg,
-#111827,
-#1e293b
-);
-
-border:1px solid #334155;
-
-padding:16px;
-
-border-radius:14px;
-
-}
-
-
-.positive {
-
-color:#22ff88;
-
-font-weight:800;
-
-}
-
-
-.negative {
-
-color:#ff5555;
-
-font-weight:800;
-
-}
-
-</style>
-""",
-unsafe_allow_html=True
-)
-
-
-
-# ============================================================
-# HEADER
-# ============================================================
-
-st.title(
-    "⚛️ Quantum Equity Research Terminal"
-)
-
-
-st.caption(
-    "Adaptive weighted quantum probability forecasting with forward accuracy tracking."
-)
-
-
-st.divider()
+apply_quantum_ui()
 # ============================================================
 # APP.PY PART 2/6
 # CONTROLS + LIVE DATA + MARKET LOADING
