@@ -35,7 +35,27 @@ st.set_page_config(
 
 
 
-# Auto refresh dashboard every 15 seconds
+# ============================================================
+# SESSION STATE STORAGE
+# ============================================================
+
+
+if "forecast_data" not in st.session_state:
+
+    st.session_state.forecast_data = None
+
+
+
+if "forecast_settings" not in st.session_state:
+
+    st.session_state.forecast_settings = None
+
+
+
+# ============================================================
+# LIVE DASHBOARD REFRESH
+# ============================================================
+
 
 st_autorefresh(
 
@@ -47,37 +67,42 @@ st_autorefresh(
 
 
 
+# ============================================================
+# STYLE
+# ============================================================
+
+
 st.markdown(
 
     """
 
-    <style>
+<style>
 
-    .metric-card {
+.metric-card {
 
-        background-color: #f8f9fa;
+    background-color: #f8f9fa;
 
-        border-left: 5px solid #1f77b4;
+    border-left: 5px solid #1f77b4;
 
-        padding: 15px;
+    padding: 15px;
 
-        border-radius: 5px;
+    border-radius: 5px;
 
-        margin-bottom: 10px;
+    margin-bottom: 10px;
 
-    }
-
-
-    .stApp {
-
-        font-family: 'Inter', sans-serif;
-
-    }
+}
 
 
-    </style>
+.stApp {
 
-    """,
+    font-family: 'Inter', sans-serif;
+
+}
+
+
+</style>
+
+""",
 
     unsafe_allow_html=True
 
@@ -104,11 +129,9 @@ st.markdown(
 
 This platform combines quantum probability sampling,
 
-technical indicators, market statistics,
+financial statistics, technical indicators,
 
-and financial risk analytics to estimate
-
-future price distributions.
+and risk analytics to estimate future price distributions.
 
 """
 
@@ -211,7 +234,7 @@ selected_ticker = (
 
 forecast_days = st.sidebar.selectbox(
 
-    "Forecast Horizon (Days):",
+    "Forecast Horizon:",
 
     options=[
 
@@ -288,7 +311,7 @@ run_button = st.sidebar.button(
 
 
 # ============================================================
-# LIVE PRICE DASHBOARD
+# LIVE PRICE
 # ============================================================
 
 
@@ -354,7 +377,7 @@ st.caption(
 
 
 # ============================================================
-# MARKET DATA LOADER
+# MARKET DATA
 # ============================================================
 
 
@@ -407,7 +430,7 @@ if market_data.empty:
 
     st.stop()
 # ============================================================
-# QUANTUM ENGINE
+# QUANTUM FORECAST ENGINE
 # ============================================================
 
 
@@ -448,23 +471,12 @@ def run_quantum_engine(
 
 
 
-    if prices.empty:
-
-
-        raise ValueError(
-
-            "No price history available."
-
-        )
-
-
-
     if len(prices) < 50:
 
 
         raise ValueError(
 
-            "Not enough historical data."
+            "Not enough historical price data."
 
         )
 
@@ -495,87 +507,59 @@ def run_quantum_engine(
     # ========================================================
 
 
-    rsi_values = (
+    rsi = float(
 
         data["RSI"]
 
         .dropna()
 
+        .iloc[-1]
+
     )
 
 
-    momentum_values = (
+    momentum = float(
 
         data["Momentum"]
 
         .dropna()
 
+        .iloc[-1]
+
     )
 
 
-    volatility_values = (
+    volatility = float(
 
         data["Volatility"]
 
         .dropna()
 
-    )
-
-
-
-    sma20_values = (
-
-        data["SMA20"]
-
-        .dropna()
-
-    )
-
-
-    sma50_values = (
-
-        data["SMA50"]
-
-        .dropna()
-
-    )
-
-
-
-    current_rsi = float(
-
-        rsi_values.iloc[-1]
-
-    )
-
-
-    current_momentum = float(
-
-        momentum_values.iloc[-1]
-
-    )
-
-
-    current_volatility = float(
-
-        volatility_values.iloc[-1]
+        .iloc[-1]
 
     )
 
 
     sma20 = float(
 
-        sma20_values.iloc[-1]
+        data["SMA20"]
+
+        .dropna()
+
+        .iloc[-1]
 
     )
 
 
     sma50 = float(
 
-        sma50_values.iloc[-1]
+        data["SMA50"]
+
+        .dropna()
+
+        .iloc[-1]
 
     )
-
 
 
     volume_change = 0
@@ -585,7 +569,7 @@ def run_quantum_engine(
     if "Volume_Change" in data.columns:
 
 
-        volume_values = (
+        volume_series = (
 
             data["Volume_Change"]
 
@@ -594,19 +578,19 @@ def run_quantum_engine(
         )
 
 
-        if not volume_values.empty:
+        if not volume_series.empty:
 
 
             volume_change = float(
 
-                volume_values.iloc[-1]
+                volume_series.iloc[-1]
 
             )
 
 
 
     # ========================================================
-    # BASE STATISTICS
+    # BASE MARKET STATISTICS
     # ========================================================
 
 
@@ -615,7 +599,6 @@ def run_quantum_engine(
         returns.mean()
 
     )
-
 
 
     sigma = float(
@@ -633,20 +616,8 @@ def run_quantum_engine(
 
 
 
-    annual_volatility = (
-
-        sigma *
-
-        np.sqrt(252) *
-
-        100
-
-    )
-
-
-
     # ========================================================
-    # FEATURE BIAS MODEL
+    # FEATURE ADJUSTMENT
     # ========================================================
 
 
@@ -654,12 +625,11 @@ def run_quantum_engine(
 
 
 
-    # Moving average trend
-
     if sma20 > sma50:
 
 
         feature_bias += 0.002
+
 
 
     else:
@@ -669,11 +639,9 @@ def run_quantum_engine(
 
 
 
-    # Momentum adjustment
-
     feature_bias += (
 
-        current_momentum *
+        momentum *
 
         0.15
 
@@ -681,28 +649,25 @@ def run_quantum_engine(
 
 
 
-    # RSI adjustment
-
-    if current_rsi > 55:
+    if rsi > 55:
 
 
         feature_bias += 0.001
 
 
 
-    elif current_rsi < 45:
+    elif rsi < 45:
 
 
         feature_bias -= 0.001
 
 
 
-    # Volume confirmation
-
     if volume_change > 0:
 
 
         feature_bias += 0.0005
+
 
 
     elif volume_change < 0:
@@ -880,7 +845,7 @@ def run_quantum_engine(
 
 
     # ========================================================
-    # QUANTUM SAMPLING
+    # QUANTUM SIMULATION
     # ========================================================
 
 
@@ -1172,7 +1137,7 @@ def run_quantum_engine(
 
         "ann_vol":
 
-        annual_volatility,
+        sigma * np.sqrt(252) * 100,
 
 
         "price_grid":
@@ -1247,12 +1212,12 @@ def run_quantum_engine(
 
         "rsi":
 
-        current_rsi,
+        rsi,
 
 
         "momentum":
 
-        current_momentum,
+        momentum,
 
 
         "sma20":
@@ -1274,11 +1239,75 @@ def run_quantum_engine(
 
 
 # ============================================================
-# RUN ANALYSIS
+# RUN OR LOAD FORECAST
 # ============================================================
 
 
-if not run_button:
+current_settings = (
+
+    selected_ticker,
+
+    forecast_days,
+
+    num_qubits,
+
+    shots
+
+)
+
+
+
+if run_button:
+
+
+    try:
+
+
+        with st.spinner(
+
+            "Running quantum probability simulation..."
+
+        ):
+
+
+            st.session_state.forecast_data = run_quantum_engine(
+
+                market_data,
+
+                forecast_days,
+
+                num_qubits,
+
+                shots
+
+            )
+
+
+
+            st.session_state.forecast_settings = current_settings
+
+
+
+    except Exception as error:
+
+
+        st.error(
+
+            f"Analysis failed: {error}"
+
+        )
+
+
+
+        st.stop()
+
+
+
+if (
+
+    st.session_state.forecast_data is None
+
+):
 
 
     st.info(
@@ -1292,41 +1321,24 @@ if not run_button:
 
 
 
-try:
+# Keep forecast visible after refresh
+
+if (
+
+    st.session_state.forecast_settings != current_settings
+
+):
 
 
-    with st.spinner(
+    st.warning(
 
-        "Running quantum probability simulation..."
-
-    ):
-
-
-        data = run_quantum_engine(
-
-            market_data,
-
-            forecast_days,
-
-            num_qubits,
-
-            shots
-
-        )
-
-
-
-except Exception as error:
-
-
-    st.error(
-
-        f"Analysis failed: {error}"
+        "Settings changed. Run analysis again to update forecast."
 
     )
 
 
-    st.stop()
+
+data = st.session_state.forecast_data
 
 
 
@@ -1653,7 +1665,7 @@ with tab1:
 
         linewidth=2,
 
-        label="Median"
+        label="Median Forecast"
 
     )
 
@@ -1674,6 +1686,7 @@ with tab1:
         "Days"
 
     )
+
 
 
     ax.set_ylabel(
@@ -1962,7 +1975,7 @@ Expected Return:
 {data['expected_pct']:+.2f}%
 
 
-Positive Return Probability:
+Positive Probability:
 
 {data['prob_positive']:.1f}%
 
@@ -1982,7 +1995,7 @@ Momentum:
 {data['momentum'] * 100:.2f}%
 
 
-Moving Average Trend:
+Moving Average:
 
 {"Bullish" if data["sma20"] > data["sma50"] else "Bearish"}
 
@@ -2004,7 +2017,7 @@ with tab4:
 
         {
 
-            "Price":
+            "Price Outcome":
 
             data["price_grid"],
 
