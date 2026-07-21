@@ -805,12 +805,10 @@ if len(market_data) < 60:
 # QUANTUM FORECAST ENGINE
 # ============================================================
 
-
 @st.cache_data(
     ttl=600,
     max_entries=20
 )
-
 def quantum_forecast(
     market_data,
     starting_price,
@@ -818,7 +816,6 @@ def quantum_forecast(
     qubits,
     shots
 ):
-
 
     prices = (
         market_data["Close"]
@@ -832,6 +829,61 @@ def quantum_forecast(
         raise ValueError(
             "Not enough historical prices."
         )
+
+
+    latest = market_data.iloc[-1]
+
+
+    market_strength = float(
+        latest.get(
+            "Market_Strength",
+            50
+        )
+    ) / 100
+
+
+    momentum_feature = float(
+        latest.get(
+            "Momentum_20",
+            0
+        )
+    )
+
+
+    rsi_signal = (
+        float(
+            latest.get(
+                "RSI",
+                50
+            )
+        )
+        -
+        50
+    ) / 50
+
+
+    macd_signal = float(
+        latest.get(
+            "MACD",
+            0
+        )
+    )
+
+
+    volatility_regime = float(
+        latest.get(
+            "Volatility_Regime",
+            1
+        )
+    )
+
+
+    quantum_feature_score = float(
+        latest.get(
+            "Quantum_Feature_Score",
+            50
+        )
+    ) / 100
 
 
 
@@ -849,7 +901,6 @@ def quantum_forecast(
     )
 
 
-
     if returns.empty:
 
         raise ValueError(
@@ -862,11 +913,6 @@ def quantum_forecast(
 
 
 
-    # ========================================================
-    # MARKET STATISTICS
-    # ========================================================
-
-
     daily_mean = float(
         returns.mean()
     )
@@ -875,7 +921,6 @@ def quantum_forecast(
     daily_volatility = float(
         returns.std()
     )
-
 
 
     if (
@@ -887,23 +932,18 @@ def quantum_forecast(
 
 
 
+    daily_volatility *= volatility_regime
+
+
+
     annual_volatility = (
-
         daily_volatility *
-
         np.sqrt(252)
-
     )
 
 
 
-    # ========================================================
-    # MOMENTUM ANALYSIS
-    # ========================================================
-
-
     recent_returns = returns.tail(90)
-
 
 
     recent_mean = float(
@@ -911,11 +951,9 @@ def quantum_forecast(
     )
 
 
-
     recent_volatility = float(
         recent_returns.std()
     )
-
 
 
     if (
@@ -932,22 +970,17 @@ def quantum_forecast(
         recent_mean /
 
         (
-            recent_volatility
-            + 1e-9
+            recent_volatility +
+            1e-9
         )
 
     )
 
 
-
     momentum_score = np.clip(
-
         momentum_score,
-
         -1,
-
         1
-
     )
 
 
@@ -956,11 +989,9 @@ def quantum_forecast(
 
         regime = "Bullish"
 
-
     elif momentum_score < -0.25:
 
         regime = "Bearish"
-
 
     else:
 
@@ -968,52 +999,59 @@ def quantum_forecast(
 
 
 
-    # ========================================================
-    # DRIFT MODEL
-    # ========================================================
+    feature_drift = (
+
+        market_strength * 0.35
+
+        +
+
+        momentum_feature * 0.25
+
+        +
+
+        rsi_signal * 0.15
+
+        +
+
+        np.tanh(macd_signal) * 0.15
+
+        +
+
+        quantum_feature_score * 0.10
+
+    )
 
 
-    drift = daily_mean
 
+    drift = (
 
+        daily_mean * 0.40
 
-    drift += (
+        +
 
-        momentum_score *
-
-        daily_volatility *
-
-        0.15
+        feature_drift * 0.60
 
     )
 
 
 
-    drift -= (
+    if regime == "Bullish":
 
-        0.5 *
+        drift *= 1.20
 
-        daily_volatility ** 2
 
-    )
+    elif regime == "Bearish":
+
+        drift *= 0.80
 
 
 
     drift = np.clip(
-
         drift,
-
         -0.01,
-
         0.01
-
     )
 
-
-
-    # ========================================================
-    # PRICE DISTRIBUTION
-    # ========================================================
 
 
     years = days / 252
@@ -1025,11 +1063,8 @@ def quantum_forecast(
         S0 *
 
         np.exp(
-
             drift *
-
             days
-
         )
 
     )
@@ -1052,7 +1087,7 @@ def quantum_forecast(
 
         forecast_volatility *
 
-        2.0
+        2
 
     )
 
@@ -1071,11 +1106,8 @@ def quantum_forecast(
     price_grid = np.linspace(
 
         max(
-
             expected_price - spread,
-
             S0 * 0.50
-
         ),
 
         expected_price + spread,
@@ -1089,11 +1121,8 @@ def quantum_forecast(
     return_grid = (
 
         (
-
             price_grid -
-
             S0
-
         )
 
         /
@@ -1104,22 +1133,16 @@ def quantum_forecast(
 
 
 
-    # ========================================================
-    # PROBABILITY DISTRIBUTION
-    # ========================================================
-
-
     expected_return = (
 
         np.exp(
-
             drift *
-
             days
-
         )
 
-        - 1
+        -
+
+        1
 
     )
 
@@ -1134,7 +1157,6 @@ def quantum_forecast(
     )
 
 
-
     if return_volatility <= 0:
 
         return_volatility = 0.05
@@ -1144,13 +1166,9 @@ def quantum_forecast(
     z_scores = (
 
         (
-
             return_grid / 100
-
             -
-
             expected_return
-
         )
 
         /
@@ -1171,31 +1189,30 @@ def quantum_forecast(
 
 
 
-    probabilities = np.nan_to_num(
+    probabilities *= (
 
-        probabilities
+        0.5 +
+
+        quantum_feature_score
 
     )
 
 
 
+    probabilities = np.nan_to_num(
+        probabilities
+    )
+
+
     if probabilities.sum() <= 0:
 
         probabilities = np.ones(
-
             states
-
         )
-
 
 
     probabilities /= probabilities.sum()
 
-
-
-    # ========================================================
-    # QUANTUM STATE SIMULATION
-    # ========================================================
 
 
     quantum_probability = None
@@ -1204,23 +1221,15 @@ def quantum_forecast(
 
     try:
 
-
         circuit = QuantumCircuit(
-
             qubits
-
         )
-
 
 
         circuit.initialize(
-
             np.sqrt(probabilities),
-
             range(qubits)
-
         )
-
 
 
         circuit.measure_all()
@@ -1228,19 +1237,13 @@ def quantum_forecast(
 
 
         simulator = AerSimulator(
-
             method="matrix_product_state"
-
         )
 
 
-
         result = simulator.run(
-
             circuit,
-
             shots=shots
-
         ).result()
 
 
@@ -1250,78 +1253,47 @@ def quantum_forecast(
 
 
         quantum_probability = np.zeros(
-
             states
-
         )
 
 
 
         for state, count in counts.items():
 
+            index = int(
+                state,
+                2
+            )
 
-            try:
 
+            if index < states:
 
-                index = int(
-
-                    state,
-
-                    2
-
+                quantum_probability[index] = (
+                    count /
+                    shots
                 )
-
-
-                if index < states:
-
-
-                    quantum_probability[index] = (
-
-                        count /
-
-                        shots
-
-                    )
-
-
-            except Exception:
-
-
-                continue
 
 
 
     except Exception:
 
-
         quantum_probability = None
 
 
 
-    # ========================================================
-    # QUANTUM FALLBACK
-    # ========================================================
-
-
     if (
         quantum_probability is None
-        or quantum_probability.sum() <= 0
+        or
+        quantum_probability.sum() <= 0
     ):
-
 
         quantum_probability = probabilities.copy()
 
 
     else:
 
-
         quantum_probability /= quantum_probability.sum()
 
-
-
-    # ========================================================
-    # FORECAST ADJUSTMENT
-    # ========================================================
 
 
     raw_expected_price = np.sum(
@@ -1351,11 +1323,8 @@ def quantum_forecast(
         raw_expected_price *
 
         (
-
             1 -
-
             confidence_penalty
-
         )
 
         +
@@ -1368,21 +1337,13 @@ def quantum_forecast(
 
 
 
-    # ========================================================
-    # CONFIDENCE SCORE
-    # ========================================================
-
-
     entropy = -np.sum(
 
         quantum_probability *
 
         np.log(
-
             quantum_probability +
-
             1e-12
-
         )
 
     )
@@ -1390,8 +1351,31 @@ def quantum_forecast(
 
 
     max_entropy = np.log(
-
         states
+    )
+
+
+
+    entropy_confidence = (
+
+        1 -
+
+        (
+            entropy /
+            max_entropy
+        )
+
+    ) * 100
+
+
+
+    stability_score = max(
+
+        0,
+
+        100 -
+
+        annual_volatility * 100
 
     )
 
@@ -1399,28 +1383,24 @@ def quantum_forecast(
 
     confidence_score = (
 
-        1 -
+        entropy_confidence * 0.5
 
-        (
+        +
 
-            entropy /
+        market_strength * 100 * 0.3
 
-            max_entropy
+        +
 
-        )
+        stability_score * 0.2
 
-    ) * 100
+    )
 
 
 
     confidence_score = np.clip(
-
         confidence_score,
-
         5,
-
         95
-
     )
 
 
@@ -1446,8 +1426,6 @@ def quantum_forecast(
         "confidence_score": confidence_score
 
     }
-
-
 
 # ============================================================
 # RUN QUANTUM ANALYSIS
