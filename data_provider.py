@@ -3,7 +3,6 @@ import requests
 import pandas as pd
 import numpy as np
 import streamlit as st
-import datetime
 
 
 # ============================================================
@@ -16,20 +15,17 @@ DATA_FOLDER = "data"
 
 if not os.path.exists(DATA_FOLDER):
 
-    os.makedirs(
-        DATA_FOLDER
-    )
+    os.makedirs(DATA_FOLDER)
 
 
 
 YAHOO_HEADERS = {
 
     "User-Agent":
+
     "Mozilla/5.0"
 
 }
-
-
 
 
 
@@ -39,14 +35,23 @@ YAHOO_HEADERS = {
 
 
 def save_stock_data(
+
     ticker,
+
     dataframe
+
 ):
+
 
     try:
 
-        filepath = (
-            f"{DATA_FOLDER}/{ticker}.csv"
+
+        filepath = os.path.join(
+
+            DATA_FOLDER,
+
+            f"{ticker}.csv"
+
         )
 
 
@@ -75,17 +80,27 @@ def save_stock_data(
 
 
 def load_saved_data(
+
     ticker
+
 ):
+
 
     try:
 
-        filepath = (
-            f"{DATA_FOLDER}/{ticker}.csv"
+
+        filepath = os.path.join(
+
+            DATA_FOLDER,
+
+            f"{ticker}.csv"
+
         )
 
 
+
         if not os.path.exists(filepath):
+
 
             return pd.DataFrame()
 
@@ -96,6 +111,18 @@ def load_saved_data(
             filepath
 
         )
+
+
+
+        if "Date" in dataframe.columns:
+
+
+            dataframe["Date"] = pd.to_datetime(
+
+                dataframe["Date"]
+
+            )
+
 
 
         return dataframe
@@ -114,6 +141,7 @@ def load_saved_data(
         )
 
 
+
         return pd.DataFrame()
 
 
@@ -121,16 +149,19 @@ def load_saved_data(
 
 
 # ============================================================
-# FORMAT FUNCTIONS
+# FORMATTING FUNCTIONS
 # ============================================================
 
 
 def format_price(
+
     value
+
 ):
 
 
     if value is None:
+
 
         return "N/A"
 
@@ -138,7 +169,9 @@ def format_price(
 
     try:
 
+
         return f"${float(value):,.2f}"
+
 
 
     except:
@@ -151,11 +184,14 @@ def format_price(
 
 
 def format_percent(
+
     value
+
 ):
 
 
     if value is None:
+
 
         return "N/A"
 
@@ -164,15 +200,7 @@ def format_percent(
     try:
 
 
-        value = float(value)
-
-
-        if value >= 0:
-
-            return f"+{value:.2f}%"
-
-
-        return f"{value:.2f}%"
+        return f"{float(value):+.2f}%"
 
 
 
@@ -186,11 +214,14 @@ def format_percent(
 
 
 def format_volume(
+
     value
+
 ):
 
 
     if value is None:
+
 
         return "N/A"
 
@@ -198,11 +229,13 @@ def format_volume(
 
     try:
 
+
         value = float(value)
 
 
 
         if value >= 1_000_000_000:
+
 
             return f"{value / 1_000_000_000:.2f}B"
 
@@ -210,11 +243,13 @@ def format_volume(
 
         if value >= 1_000_000:
 
+
             return f"{value / 1_000_000:.2f}M"
 
 
 
         if value >= 1_000:
+
 
             return f"{value / 1_000:.2f}K"
 
@@ -225,25 +260,33 @@ def format_volume(
 
 
     except:
-
-
-        return "N/A"
-
-
-
-
-
 # ============================================================
 # TECHNICAL INDICATORS
 # ============================================================
 
 
 def add_indicators(
-    data
+
+    dataframe
+
 ):
 
 
-    data = data.copy()
+    data = dataframe.copy()
+
+
+
+    if data.empty:
+
+
+        return data
+
+
+
+    if "Close" not in data.columns:
+
+
+        return data
 
 
 
@@ -261,7 +304,13 @@ def add_indicators(
 
         data["Close"]
 
-        .rolling(20)
+        .rolling(
+
+            window=20,
+
+            min_periods=1
+
+        )
 
         .mean()
 
@@ -273,7 +322,13 @@ def add_indicators(
 
         data["Close"]
 
-        .rolling(50)
+        .rolling(
+
+            window=50,
+
+            min_periods=1
+
+        )
 
         .mean()
 
@@ -281,17 +336,16 @@ def add_indicators(
 
 
 
-    delta = (
-
-        data["Close"]
-
-        .diff()
-
-    )
+    # --------------------------------------------------------
+    # RSI
+    # --------------------------------------------------------
 
 
+    delta = data["Close"].diff()
 
-    gain = delta.clip(
+
+
+    gains = delta.clip(
 
         lower=0
 
@@ -299,7 +353,7 @@ def add_indicators(
 
 
 
-    loss = -delta.clip(
+    losses = -delta.clip(
 
         upper=0
 
@@ -309,9 +363,15 @@ def add_indicators(
 
     avg_gain = (
 
-        gain
+        gains
 
-        .rolling(14)
+        .rolling(
+
+            window=14,
+
+            min_periods=1
+
+        )
 
         .mean()
 
@@ -321,9 +381,15 @@ def add_indicators(
 
     avg_loss = (
 
-        loss
+        losses
 
-        .rolling(14)
+        .rolling(
+
+            window=14,
+
+            min_periods=1
+
+        )
 
         .mean()
 
@@ -360,21 +426,51 @@ def add_indicators(
         )
 
     )
-# ============================================================
-# CONTINUED TECHNICAL INDICATORS
-# ============================================================
+
+
+
+    data["RSI"] = data["RSI"].fillna(
+
+        50
+
+    )
+
+
+
+    # --------------------------------------------------------
+    # VOLATILITY
+    # --------------------------------------------------------
 
 
     data["Volatility"] = (
 
         data["Return"]
 
-        .rolling(20)
+        .rolling(
+
+            window=20,
+
+            min_periods=5
+
+        )
 
         .std()
 
     )
 
+
+
+    data["Volatility"] = data["Volatility"].fillna(
+
+        data["Return"].std()
+
+    )
+
+
+
+    # --------------------------------------------------------
+    # MOMENTUM
+    # --------------------------------------------------------
 
 
     data["Momentum"] = (
@@ -395,6 +491,19 @@ def add_indicators(
 
 
 
+    data["Momentum"] = data["Momentum"].fillna(
+
+        0
+
+    )
+
+
+
+    # --------------------------------------------------------
+    # VOLUME CHANGE
+    # --------------------------------------------------------
+
+
     if "Volume" in data.columns:
 
 
@@ -407,6 +516,33 @@ def add_indicators(
         )
 
 
+        data["Volume_Change"] = (
+
+            data["Volume_Change"]
+
+            .replace(
+
+                [
+
+                    np.inf,
+
+                    -np.inf
+
+                ],
+
+                np.nan
+
+            )
+
+            .fillna(
+
+                0
+
+            )
+
+        )
+
+
     else:
 
 
@@ -414,7 +550,40 @@ def add_indicators(
 
 
 
-    # Prevent missing indicator crashes
+    return data
+
+
+
+
+
+# ============================================================
+# CLEAN DATA
+# ============================================================
+
+
+def clean_market_data(
+
+    dataframe
+
+):
+
+
+    if dataframe is None:
+
+
+        return pd.DataFrame()
+
+
+
+    if dataframe.empty:
+
+
+        return pd.DataFrame()
+
+
+
+    data = dataframe.copy()
+
 
 
     data = data.replace(
@@ -430,6 +599,21 @@ def add_indicators(
         np.nan
 
     )
+
+
+
+    if "Close" in data.columns:
+
+
+        data = data.dropna(
+
+            subset=[
+
+                "Close"
+
+            ]
+
+        )
 
 
 
@@ -454,7 +638,7 @@ def add_indicators(
 
 @st.cache_data(
 
-    ttl=900,
+    ttl=300,
 
     max_entries=100
 
@@ -467,37 +651,23 @@ def get_stock_data(
 ):
 
 
-    ticker = (
+    ticker = ticker.upper().strip()
 
-        ticker
 
-        .upper()
 
-        .strip()
+    url = (
+
+        "https://query1.finance.yahoo.com/"
+
+        f"v8/finance/chart/{ticker}"
+
+        "?range=2y&interval=1d"
 
     )
 
 
 
     try:
-
-
-        url = (
-
-            "https://query1.finance.yahoo.com/"
-
-            "v8/finance/chart/"
-
-            f"{ticker}"
-
-            "?period1=1700000000"
-
-            "&period2=9999999999"
-
-            "&interval=1d"
-
-        )
-
 
 
         response = requests.get(
@@ -509,10 +679,6 @@ def get_stock_data(
             timeout=15
 
         )
-
-
-
-        response.raise_for_status()
 
 
 
@@ -545,9 +711,13 @@ def get_stock_data(
         if not result:
 
 
-            raise Exception(
+            return clean_market_data(
 
-                "Yahoo returned no historical data"
+                load_saved_data(
+
+                    ticker
+
+                )
 
             )
 
@@ -559,7 +729,9 @@ def get_stock_data(
 
         timestamps = result.get(
 
-            "timestamp"
+            "timestamp",
+
+            []
 
         )
 
@@ -593,7 +765,6 @@ def get_stock_data(
 
             {
 
-
                 "Date":
 
                 pd.to_datetime(
@@ -605,22 +776,24 @@ def get_stock_data(
                 ),
 
 
-
                 "Close":
 
                 quote.get(
 
-                    "close"
+                    "close",
+
+                    []
 
                 ),
-
 
 
                 "Volume":
 
                 quote.get(
 
-                    "volume"
+                    "volume",
+
+                    []
 
                 )
 
@@ -630,26 +803,11 @@ def get_stock_data(
 
 
 
-        dataframe = dataframe.dropna(
+        dataframe = clean_market_data(
 
-            subset=[
-
-                "Close"
-
-            ]
+            dataframe
 
         )
-
-
-
-        if len(dataframe) < 50:
-
-
-            raise Exception(
-
-                "Insufficient market history"
-
-            )
 
 
 
@@ -661,13 +819,16 @@ def get_stock_data(
 
 
 
-        save_stock_data(
+        if not dataframe.empty:
 
-            ticker,
 
-            dataframe
+            save_stock_data(
 
-        )
+                ticker,
+
+                dataframe
+
+            )
 
 
 
@@ -676,7 +837,6 @@ def get_stock_data(
 
 
     except Exception as error:
-
 
 
         print(
@@ -689,28 +849,17 @@ def get_stock_data(
 
 
 
-        saved_data = load_saved_data(
+        return clean_market_data(
 
-            ticker
+            load_saved_data(
+
+                ticker
+
+            )
 
         )
-
-
-
-        if not saved_data.empty:
-
-
-            return saved_data
-
-
-
-        return pd.DataFrame()
-
-
-
-
-# ============================================================
-# LIVE PRICE DATA
+    # ============================================================
+# LIVE MARKET DATA
 # ============================================================
 
 
@@ -729,31 +878,21 @@ def get_live_price(
 ):
 
 
-    ticker = (
+    ticker = ticker.upper().strip()
 
-        ticker
 
-        .upper()
 
-        .strip()
+    url = (
+
+        "https://query1.finance.yahoo.com/"
+
+        f"v8/finance/chart/{ticker}"
 
     )
 
 
 
     try:
-
-
-        url = (
-
-            "https://query1.finance.yahoo.com/"
-
-            "v8/finance/chart/"
-
-            f"{ticker}"
-
-        )
-
 
 
         response = requests.get(
@@ -768,17 +907,13 @@ def get_live_price(
 
 
 
-        response.raise_for_status()
-
-
-
-        json_data = response.json()
+        data = response.json()
 
 
 
         result = (
 
-            json_data
+            data
 
             .get(
 
@@ -815,7 +950,7 @@ def get_live_price(
 
 
 
-        price = meta.get(
+        current_price = meta.get(
 
             "regularMarketPrice"
 
@@ -831,14 +966,21 @@ def get_live_price(
 
 
 
-        if price is None:
+        if current_price is None:
+
+
+            current_price = meta.get(
+
+                "chartPreviousClose"
+
+            )
+
+
+
+        if current_price is None:
 
 
             return None
-
-
-
-        change_percent = 0
 
 
 
@@ -849,17 +991,26 @@ def get_live_price(
 
                 (
 
-                    price -
+                    float(current_price)
 
-                    previous_close
+                    -
+
+                    float(previous_close)
 
                 )
 
                 /
 
-                previous_close
+                float(previous_close)
 
             ) * 100
+
+
+
+        else:
+
+
+            change_percent = 0
 
 
 
@@ -868,25 +1019,50 @@ def get_live_price(
 
             "price":
 
-            float(price),
-
-
-
-            "change_percent":
-
-            float(change_percent),
+            float(current_price),
 
 
 
             "previous_close":
 
-            float(previous_close)
+            (
 
-            if previous_close
+                float(previous_close)
 
-            else None
+                if previous_close
+
+                else None
+
+            ),
+
+
+
+            "change_percent":
+
+            float(change_percent)
 
         }
+
+
+
+    except Exception as error:
+
+
+        print(
+
+            "Live price error:",
+
+            error
+
+        )
+
+
+
+        return None
+
+
+
+
 
 # ============================================================
 # COMPANY INFORMATION
@@ -908,32 +1084,44 @@ def get_company_info(
 ):
 
 
-    ticker = (
+    ticker = ticker.upper().strip()
 
-        ticker
 
-        .upper()
 
-        .strip()
+    url = (
+
+        "https://query1.finance.yahoo.com/"
+
+        f"v7/finance/quote?symbols={ticker}"
 
     )
 
 
+
+    default = {
+
+
+        "name":
+
+        ticker,
+
+
+
+        "exchange":
+
+        "Unknown",
+
+
+
+        "currency":
+
+        "USD"
+
+    }
+
+
+
     try:
-
-
-        url = (
-
-            "https://query1.finance.yahoo.com/"
-
-            "v10/finance/quoteSummary/"
-
-            f"{ticker}"
-
-            "?modules=assetProfile"
-
-        )
-
 
 
         response = requests.get(
@@ -948,21 +1136,17 @@ def get_company_info(
 
 
 
-        response.raise_for_status()
-
-
-
         data = response.json()
 
 
 
-        profile = (
+        result = (
 
             data
 
             .get(
 
-                "quoteSummary",
+                "quoteResponse",
 
                 {}
 
@@ -972,15 +1156,7 @@ def get_company_info(
 
                 "result",
 
-                [{}]
-
-            )[0]
-
-            .get(
-
-                "assetProfile",
-
-                {}
+                []
 
             )
 
@@ -988,41 +1164,43 @@ def get_company_info(
 
 
 
-        name = profile.get(
-
-            "longName"
-
-        )
+        if not result:
 
 
+            return default
 
-        if name is None:
 
 
-            name = ticker
+        quote = result[0]
 
 
 
         return {
 
 
-            "ticker":
-
-            ticker,
-
-
-
             "name":
 
-            name,
+            quote.get(
+
+                "longName",
+
+                quote.get(
+
+                    "shortName",
+
+                    ticker
+
+                )
+
+            ),
 
 
 
-            "sector":
+            "exchange":
 
-            profile.get(
+            quote.get(
 
-                "sector",
+                "exchange",
 
                 "Unknown"
 
@@ -1030,25 +1208,13 @@ def get_company_info(
 
 
 
-            "industry":
+            "currency":
 
-            profile.get(
+            quote.get(
 
-                "industry",
+                "currency",
 
-                "Unknown"
-
-            ),
-
-
-
-            "description":
-
-            profile.get(
-
-                "longBusinessSummary",
-
-                "No description available."
+                "USD"
 
             )
 
@@ -1069,38 +1235,7 @@ def get_company_info(
 
 
 
-        return {
-
-
-            "ticker":
-
-            ticker,
-
-
-
-            "name":
-
-            ticker,
-
-
-
-            "sector":
-
-            "Unknown",
-
-
-
-            "industry":
-
-            "Unknown",
-
-
-
-            "description":
-
-            "No company information available."
-
-        }
+        return default
 
 
 
@@ -1121,240 +1256,28 @@ def get_market_status(
     if live_data is None:
 
 
-        return "Unknown"
+        return "Unavailable"
 
 
 
-    try:
+    if live_data.get(
 
+        "price"
 
-        market_state = live_data.get(
+    ) is None:
 
-            "marketState"
 
-        )
+        return "Unavailable"
 
 
 
-        if market_state:
-
-
-            return market_state
-
-
-
-        return "Open / Data Available"
-
-
-
-    except:
-
-
-        return "Unknown"
-
-
-
-
-
-# ============================================================
-# IMPROVED LIVE MARKET DATA
-# ============================================================
-
-
-@st.cache_data(
-
-    ttl=15,
-
-    max_entries=200
-
-)
-
-def get_market_snapshot(
-
-    ticker
-
-):
-
-
-    ticker = (
-
-        ticker
-
-        .upper()
-
-        .strip()
-
-    )
-
-
-    try:
-
-
-        url = (
-
-            "https://query1.finance.yahoo.com/"
-
-            "v7/finance/quote"
-
-            f"?symbols={ticker}"
-
-        )
-
-
-
-        response = requests.get(
-
-            url,
-
-            headers=YAHOO_HEADERS,
-
-            timeout=10
-
-        )
-
-
-
-        response.raise_for_status()
-
-
-
-        data = response.json()
-
-
-
-        quote = (
-
-            data
-
-            .get(
-
-                "quoteResponse",
-
-                {}
-
-            )
-
-            .get(
-
-                "result",
-
-                [{}]
-
-            )[0]
-
-        )
-
-
-
-        price = quote.get(
-
-            "regularMarketPrice"
-
-        )
-
-
-
-        previous = quote.get(
-
-            "regularMarketPreviousClose"
-
-        )
-
-
-
-        change = quote.get(
-
-            "regularMarketChangePercent"
-
-        )
-
-
-
-        if price is None:
-
-
-            return None
-
-
-
-        return {
-
-
-            "ticker":
-
-            ticker,
-
-
-
-            "price":
-
-            float(price),
-
-
-
-            "previous_close":
-
-            float(previous)
-
-            if previous
-
-            else None,
-
-
-
-            "change_percent":
-
-            float(change)
-
-            if change
-
-            else 0,
-
-
-
-            "market_state":
-
-            quote.get(
-
-                "marketState",
-
-                "Unknown"
-
-            ),
-
-
-
-            "volume":
-
-            quote.get(
-
-                "regularMarketVolume"
-
-            )
-
-        }
-
-
-
-    except Exception as error:
-
-
-        print(
-
-            "Snapshot error:",
-
-            error
-
-        )
-
-
-        return None
+    return "Data Available"
     # ============================================================
-# FINAL FALLBACK UTILITIES
+# DATA VALIDATION HELPERS
 # ============================================================
 
 
-def clean_market_dataframe(
+def validate_market_data(
 
     dataframe
 
@@ -1364,69 +1287,65 @@ def clean_market_dataframe(
     if dataframe is None:
 
 
-        return pd.DataFrame()
+        return False
 
 
 
     if dataframe.empty:
 
 
-        return pd.DataFrame()
+        return False
 
 
 
-    dataframe = dataframe.copy()
+    required_columns = [
+
+
+        "Close"
+
+
+    ]
 
 
 
-    dataframe = dataframe.replace(
+    for column in required_columns:
 
-        [
 
-            np.inf,
+        if column not in dataframe.columns:
 
-            -np.inf
 
-        ],
-
-        np.nan
-
-    )
+            return False
 
 
 
-    dataframe = dataframe.dropna(
+    if len(dataframe) < 20:
 
-        subset=[
 
-            "Close"
-
-        ]
-
-    )
+        return False
 
 
 
-    dataframe = dataframe.ffill()
-
-
-
-    dataframe = dataframe.bfill()
-
-
-
-    return dataframe
+    return True
 
 
 
 
 
 # ============================================================
-# CACHE MANAGEMENT
+# FORCE FRESH DATA FUNCTIONS
 # ============================================================
 
 
 def clear_data_cache():
+
+    """
+    Clears Streamlit cached market data.
+
+    Use this when:
+    - Yahoo Finance data appears stale
+    - A stock price is not updating
+    - Testing a new ticker
+    """
 
 
     try:
@@ -1436,12 +1355,7 @@ def clear_data_cache():
 
 
 
-        return True
-
-
-
     except Exception as error:
-
 
 
         print(
@@ -1454,96 +1368,180 @@ def clear_data_cache():
 
 
 
-        return False
-
-
-
 
 
 # ============================================================
-# DATA VALIDATION
+# SAFE NUMERIC CONVERSION
 # ============================================================
 
 
-def validate_stock_data(
+def safe_float(
 
-    dataframe
+    value,
+
+    default=0.0
 
 ):
 
 
-    checks = {
+    try:
 
 
-        "exists":
-
-        dataframe is not None,
+        if value is None:
 
 
-
-        "not_empty":
-
-        False
-
-        if dataframe is None
-
-        else not dataframe.empty,
+            return default
 
 
 
-        "has_close":
-
-        False
-
-        if dataframe is None
-
-        else "Close" in dataframe.columns,
+        value = float(value)
 
 
 
-        "enough_history":
+        if np.isnan(value):
 
-        False
 
-        if dataframe is None
+            return default
 
-        else len(dataframe) >= 50
+
+
+        return value
+
+
+
+    except:
+
+
+        return default
+
+
+
+
+
+# ============================================================
+# EXPORT SUMMARY DATA
+# ============================================================
+
+
+def get_market_summary(
+
+    ticker
+
+):
+
+
+    live = get_live_price(
+
+        ticker
+
+    )
+
+
+
+    company = get_company_info(
+
+        ticker
+
+    )
+
+
+
+    historical = get_stock_data(
+
+        ticker
+
+    )
+
+
+
+    summary = {
+
+
+        "ticker":
+
+        ticker.upper(),
+
+
+
+        "company":
+
+        company.get(
+
+            "name",
+
+            ticker
+
+        ),
+
+
+
+        "price":
+
+        None,
+
+
+
+        "daily_change":
+
+        None,
+
+
+
+        "historical_points":
+
+        len(historical)
+
+        if historical is not None
+
+        else 0
 
     }
 
 
 
-    return checks
+    if live:
+
+
+        summary["price"] = live.get(
+
+            "price"
+
+        )
+
+
+        summary["daily_change"] = live.get(
+
+            "change_percent"
+
+        )
+
+
+
+    return summary
 
 
 
 
 
 # ============================================================
-# EXPORT AVAILABLE FUNCTIONS
+# MODULE TEST
 # ============================================================
 
 
-__all__ = [
+if __name__ == "__main__":
 
-    "get_stock_data",
 
-    "get_live_price",
+    test = get_stock_data(
 
-    "get_market_snapshot",
+        "AAPL"
 
-    "get_company_info",
+    )
 
-    "get_market_status",
 
-    "format_price",
+    print(
 
-    "format_percent",
+        test.tail()
 
-    "format_volume",
+    )
 
-    "clear_data_cache",
-
-    "validate_stock_data"
-
-]
+        return "N/A"
