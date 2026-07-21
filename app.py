@@ -918,9 +918,26 @@ with header3:
                 f"🔴 {daily_change:.2f}%"
                 f"</span>"
             )
-        else:
 
-             change_display = "N/A"
+    else:
+
+        change_display = "N/A"
+
+
+    st.markdown(
+        f"""
+        <div class="metric-box">
+
+        <h4>Daily Change</h4>
+
+        <h2>
+        {change_display}
+        </h2>
+
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
 
     st.metric(
