@@ -2390,101 +2390,47 @@ def quantum_forecast(
     # ========================================================
 
 
-    return {
+return {
+
+    "starting_price": S0,
+
+    "price_grid": price_grid,
+
+    "return_grid": return_grid,
+
+    "probability": quantum_probability,
+
+    "expected_price": quantum_expected_price,
+
+    "volatility": annual_vol * 100,
+
+    "returns": returns,
+
+    "market_regime": regime,
+
+    "confidence_score": confidence_score,
+
+    "market_state": market_state,
+
+    "risk_score": risk_score,
 
 
-        "starting_price":
+    "upside_probability": upside_probability,
 
-            S0,
+    "downside_probability": downside_probability,
 
-
-        "price_grid":
-
-            price_grid,
+    "neutral_probability": neutral_probability,
 
 
-        "return_grid":
+    "model_metadata": {
 
-            return_grid,
+        "technical_signal": technical_signal,
 
-
-        "probability":
-
-            quantum_probability,
-
-
-        "expected_price":
-
-            quantum_expected_price,
-
-
-        "volatility":
-
-            annual_vol * 100,
-
-
-        "returns":
-
-            returns,
-
-
-        "market_regime":
-
-            regime,
-
-
-        "confidence_score":
-
-            confidence_score,
-
-
-        "market_state":
-
-            market_state,
-
-
-        "risk_score":
-
-            risk_score,
-
-
-        "upside_probability":
-
-            upside_probability,
-
-
-        "downside_probability":
-
-            downside_probability,
-
-
-        "neutral_probability":
-
-            neutral_probability,
-
-
-        # kept internally only
-        # never displayed unless requested
-
-        "model_metadata": {
-
-
-            "technical_signal":
-
-                technical_signal,
-
-
-            "market_state":
-
-                market_state
-
-
-        }
-
+        "market_state": market_state
 
     }
 
-
+}
 
 
 
