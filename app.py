@@ -1,7 +1,7 @@
 # ============================================================
 # APP.PY
 # Quantum Equity Research Terminal
-# CLEAN VERSION USING quantum_engine.py + analytics.py
+# JOINT MULTI-FACTOR QUANTUM VERSION
 # PART 1/3
 # ============================================================
 
@@ -34,9 +34,12 @@ from prediction_memory import (
 )
 
 
-from quantum_engine import (
-    quantum_forecast
+from quantum_joint_engine import (
+    quantum_joint_forecast
 )
+
+
+from sector_lookup import get_sector_etf
 
 
 from analytics import (
@@ -345,13 +348,13 @@ def quantum_loading():
 
     frames=[
 
-        "⚛️ Initializing probability space",
+        "⚛️ Building joint factor distribution from history",
 
-        "⚛️ Encoding market variables",
+        "⚛️ Estimating correlation structure across factors",
 
-        "⚛️ Running quantum simulation",
+        "⚛️ Encoding entangled amplitudes on quantum circuit",
 
-        "⚛️ Measuring forecast states"
+        "⚛️ Measuring joint quantum state"
 
     ]
 
@@ -465,21 +468,20 @@ forecast_days = st.sidebar.selectbox(
 
 
 
-qubits = st.sidebar.slider(
-    "Quantum Qubits",
-    3,
-    8,
-    6
-)
-
-
-
 shots = st.sidebar.slider(
     "Quantum Shots",
     500,
     3000,
     1500,
     step=500
+)
+
+
+st.sidebar.caption(
+    "Qubit count is chosen automatically per run based on "
+    "available history and shot count (2 or 3 qubits per "
+    "factor across 4 factors, capped at 12 qubits total) "
+    "to balance resolution against runtime safety."
 )
 
 
@@ -504,7 +506,7 @@ if clear_button:
     # ============================================================
 # APP.PY
 # PART 2/3
-# DATA PIPELINE + FORECAST EXECUTION
+# DATA PIPELINE + JOINT FORECAST EXECUTION
 # ============================================================
 
 
@@ -700,6 +702,75 @@ market_data = cached_history(
 
 
 # ============================================================
+# MACRO / SECTOR PROXY DATA CACHE
+# ============================================================
+# Fetched for the joint quantum engine's macro factor (averaged
+# SPY + sector ETF returns). Failure here is non-fatal: the
+# joint engine degrades gracefully to 3-factor mode and reports
+# that in model_metadata rather than crashing.
+
+@st.cache_data(
+    ttl=900,
+    max_entries=50
+)
+def cached_macro_series(symbol):
+
+    try:
+
+        data = get_stock_data(
+            symbol
+        )
+
+
+        if data is None or data.empty:
+
+            return pd.DataFrame()
+
+
+        if not validate_market_data(
+            data
+        ):
+
+            return pd.DataFrame()
+
+
+        return data.copy()
+
+
+
+    except:
+
+        return pd.DataFrame()
+
+
+
+spy_data = cached_macro_series(
+    "SPY"
+)
+
+
+sector_etf = get_sector_etf(
+    ticker
+)
+
+
+sector_data = (
+
+    cached_macro_series(
+        sector_etf
+    )
+
+    if sector_etf
+
+    else
+
+    pd.DataFrame()
+
+)
+
+
+
+# ============================================================
 # DATA VALIDATION
 # ============================================================
 
@@ -794,23 +865,25 @@ with st.expander(
 
 
 # ============================================================
-# ANALYTICS ENGINE
+# ANALYTICS ENGINE (existing feature panel, informational only;
+# the forecast itself is now driven by quantum_joint_forecast,
+# which builds its own factor frame internally)
 # ============================================================
 
-market_data = add_features(
+market_data_features = add_features(
     market_data
 )
 
 
 
 quantum_inputs = extract_inputs(
-    market_data
+    market_data_features
 )
 
 
 
 if not validate_inputs(
-    market_data,
+    market_data_features,
     quantum_inputs
 ):
 
@@ -860,8 +933,6 @@ forecast_settings = [
 
     forecast_days,
 
-    qubits,
-
     shots
 
 ]
@@ -901,21 +972,23 @@ if run_button:
 
 
         with st.spinner(
-            "Running quantum forecast engine..."
+            "Running joint quantum forecast engine..."
         ):
 
 
-            result = quantum_forecast(
+            result = quantum_joint_forecast(
 
                 market_data,
 
                 execution_price,
 
-                forecast_days,
+                days=forecast_days,
 
-                qubits,
+                shots=shots,
 
-                shots
+                spy_data=spy_data,
+
+                sector_data=sector_data
 
             )
 
@@ -972,7 +1045,7 @@ if run_button:
 
 
         st.success(
-            "Quantum analysis completed."
+            "Quantum joint analysis completed."
         )
 
 
@@ -1078,7 +1151,7 @@ if len(gc.get_objects()) > 500000:
 # ============================================================
 # APP.PY
 # PART 3/3
-# DASHBOARD + ANALYTICS + EXPORT
+# DASHBOARD + CONDITIONAL RISK + JOINT HEATMAP + EXPORT
 # ============================================================
 
 
@@ -1170,6 +1243,63 @@ st.divider()
 
 
 # ============================================================
+# RESOLUTION / DATA HONESTY BANNER
+# ============================================================
+
+meta = forecast.get(
+    "model_metadata",
+    {}
+)
+
+
+resolution_bits = []
+
+
+resolution_bits.append(
+    f"{meta.get('total_qubits','?')} qubits "
+    f"({meta.get('qubits_per_factor','?')} per factor, "
+    f"{meta.get('resolution','?')} resolution)"
+)
+
+
+resolution_bits.append(
+    "macro factor: "
+    + (
+        "included"
+        if meta.get("macro_available")
+        else
+        "unavailable — running in 3-factor mode"
+    )
+)
+
+
+if meta.get(
+    "fallback_to_classical"
+):
+
+    resolution_bits.append(
+        "⚠️ quantum circuit execution failed this run; "
+        "showing classical joint distribution instead"
+    )
+
+
+st.caption(
+    " · ".join(
+        resolution_bits
+    )
+)
+
+
+st.caption(
+    meta.get(
+        "note",
+        ""
+    )
+)
+
+
+
+# ============================================================
 # MARKET REGIME
 # ============================================================
 
@@ -1234,11 +1364,18 @@ with c3:
 
 
 # ============================================================
-# QUANTUM DISTRIBUTION
+# QUANTUM PRICE DISTRIBUTION (marginal over price factor)
 # ============================================================
 
 st.subheader(
-    "⚛️ Quantum Price Probability"
+    "⚛️ Quantum Price Probability (Marginal)"
+)
+
+
+st.caption(
+    "Marginal distribution over price return, obtained by "
+    "summing the joint quantum-measured distribution over all "
+    "other factors (volatility, momentum, macro)."
 )
 
 
@@ -1270,7 +1407,7 @@ ax.set_ylabel(
 
 
 ax.set_title(
-    "Quantum State Distribution"
+    "Quantum State Distribution (Price Marginal)"
 )
 
 
@@ -1289,57 +1426,314 @@ plt.close(
 
 
 # ============================================================
-# RETURN DISTRIBUTION
+# CONDITIONAL RISK PANEL
 # ============================================================
 
 st.subheader(
-    "📈 Return Probability"
+    "🔗 Conditional Risk — What Correlated Factors Change"
+)
+
+
+st.caption(
+    "These probabilities come directly from the entangled joint "
+    "distribution and cannot be produced by a single-factor model. "
+    "Each row compares P(price drop > 5%) unconditionally vs. "
+    "conditioned on that factor being in its historically highest "
+    "or lowest bin."
 )
 
 
 
-fig,ax = plt.subplots(
-    figsize=(10,4)
+conditionals = forecast.get(
+    "conditionals",
+    {}
+)
+
+
+if conditionals:
+
+
+    rows = []
+
+
+    factor_labels = {
+
+        "volatility":
+        "Volatility Regime",
+
+        "momentum":
+        "Momentum",
+
+        "macro":
+        "Macro / Sector Tilt"
+
+    }
+
+
+    for factor, values in conditionals.items():
+
+
+        rows.append(
+            {
+
+                "Factor":
+                factor_labels.get(
+                    factor,
+                    factor
+                ),
+
+
+                "P(Drop>5%) | Factor High":
+
+                (
+                    f"{values['p_drop_given_high']*100:.1f}%"
+
+                    if values.get(
+                        'p_drop_given_high'
+                    ) is not None
+
+                    else
+
+                    "N/A"
+                ),
+
+
+                "P(Drop>5%) | Factor Low":
+
+                (
+                    f"{values['p_drop_given_low']*100:.1f}%"
+
+                    if values.get(
+                        'p_drop_given_low'
+                    ) is not None
+
+                    else
+
+                    "N/A"
+                ),
+
+
+                "P(Drop>5%) Unconditional":
+
+                f"{values['p_drop_unconditional']*100:.1f}%"
+
+            }
+        )
+
+
+    conditional_table = pd.DataFrame(
+        rows
+    )
+
+
+    st.dataframe(
+
+        conditional_table,
+
+        use_container_width=True,
+
+        hide_index=True
+
+    )
+
+
+else:
+
+
+    st.info(
+
+        "Conditional risk breakdown unavailable for this run "
+        "(macro factor may have been excluded — see the "
+        "resolution banner above)."
+
+    )
+
+
+
+# ============================================================
+# JOINT DISTRIBUTION HEATMAP (price return x volatility)
+# ============================================================
+
+st.subheader(
+    "🌐 Joint Distribution — Price Return × Volatility"
+)
+
+
+st.caption(
+    "Heatmap of the joint quantum-measured probability over price "
+    "return and volatility regime, marginalizing out momentum and "
+    "macro. Darker cells are historically-informed higher-probability "
+    "combinations; this shape reflects real correlation in the "
+    "underlying data, not an assumption."
 )
 
 
 
-ax.plot(
-
-    forecast["return_grid"],
-
-    forecast["probability"]
-
-)
+try:
 
 
-
-ax.set_xlabel(
-    "Return %"
-)
-
-
-ax.set_ylabel(
-    "Probability"
-)
+    active_factors = meta.get(
+        "active_factors",
+        []
+    )
 
 
-ax.set_title(
-    "Future Return Distribution"
-)
+    joint_shape = forecast.get(
+        "joint_shape"
+    )
+
+
+    joint_probability = forecast.get(
+        "joint_probability"
+    )
+
+
+    if (
+
+        joint_probability is not None
+
+        and
+
+        joint_shape
+
+        and
+
+        "price_return" in active_factors
+
+        and
+
+        "volatility" in active_factors
+
+    ):
+
+
+        joint_nd = np.array(
+            joint_probability
+        ).reshape(
+            joint_shape
+        )
+
+
+        price_axis = active_factors.index(
+            "price_return"
+        )
+
+
+        vol_axis = active_factors.index(
+            "volatility"
+        )
+
+
+        other_axes = tuple(
+
+            i
+
+            for i in range(
+                len(active_factors)
+            )
+
+            if i not in (
+                price_axis,
+
+                vol_axis
+
+            )
+
+        )
+
+
+        heat = joint_nd.sum(
+            axis=other_axes
+        )
+
+
+        # Ensure orientation is (volatility rows, price columns)
+        # for a natural "price across, volatility up" reading.
+
+        if price_axis < vol_axis:
+
+            heat = heat.T
 
 
 
-st.pyplot(
-    fig,
-    clear_figure=True
-)
+        fig2, ax2 = plt.subplots(
+            figsize=(8,6)
+        )
+
+
+        im = ax2.imshow(
+
+            heat,
+
+            aspect="auto",
+
+            origin="lower",
+
+            cmap="viridis"
+
+        )
+
+
+        ax2.set_xlabel(
+            "Price Return Bin (low → high)"
+        )
+
+
+        ax2.set_ylabel(
+            "Volatility Bin (low → high)"
+        )
+
+
+        ax2.set_title(
+            "Joint Probability: Price Return × Volatility"
+        )
+
+
+        fig2.colorbar(
+
+            im,
+
+            ax=ax2,
+
+            label="Probability"
+
+        )
+
+
+        st.pyplot(
+
+            fig2,
+
+            clear_figure=True
+
+        )
+
+
+        plt.close(
+            fig2
+        )
+
+
+    else:
+
+
+        st.info(
+
+            "Heatmap unavailable — volatility factor was not "
+            "part of this run's active factor set."
+
+        )
 
 
 
-plt.close(
-    fig
-)
+except Exception as error:
+
+
+    st.warning(
+
+        f"Heatmap rendering failed: {error}"
+
+    )
 
 
 
@@ -1372,7 +1766,13 @@ with st.expander(
 
                 "Confidence",
 
-                "Risk Score"
+                "Risk Score",
+
+                "Active Factors",
+
+                "Total Qubits",
+
+                "Resolution"
 
             ],
 
@@ -1402,7 +1802,27 @@ with st.expander(
                 f"{forecast['confidence_score']:.2f}%",
 
 
-                f"{forecast['risk_score']:.2f}"
+                f"{forecast['risk_score']:.2f}",
+
+
+                ", ".join(
+                    meta.get(
+                        "active_factors",
+                        []
+                    )
+                ),
+
+
+                meta.get(
+                    "total_qubits",
+                    "N/A"
+                ),
+
+
+                meta.get(
+                    "resolution",
+                    "N/A"
+                )
 
             ]
 
@@ -1432,13 +1852,7 @@ with st.expander(
 ):
 
 
-    metadata = forecast.get(
-        "model_metadata",
-        {}
-    )
-
-
-    weights = metadata.get(
+    weights = meta.get(
         "weights",
         {}
     )
@@ -1531,7 +1945,7 @@ with st.expander(
 
             "Market State",
 
-            f"{metadata.get('market_state',0):.4f}"
+            f"{meta.get('market_state',0):.4f}"
 
         )
 
@@ -1543,7 +1957,7 @@ with st.expander(
 
             "Technical Signal",
 
-            f"{metadata.get('technical_signal',0):.4f}"
+            f"{meta.get('technical_signal',0):.4f}"
 
         )
 
@@ -1817,14 +2231,19 @@ Hybrid forecasting system combining:
 
 • Market statistics
 • Technical indicators
-• Probability modeling
-• Quantum circuit sampling
+• Data-driven joint correlation modeling (price, volatility, momentum, macro)
+• Entangled quantum circuit sampling of the joint distribution
 • Adaptive prediction memory
 
-Built for research and experimentation.
+This system's quantum stage re-encodes and samples a joint
+probability distribution derived from real historical
+correlations; it does not add predictive information beyond
+what that historical correlation structure contains. Built for
+research and experimentation, not investment advice.
 """
 )
 
 
 
 gc.collect()
+
