@@ -253,3 +253,21 @@ def clear_memory():
 
     except Exception:
         return False
+def evaluate_predictions():
+    return load_memory()
+
+
+def get_prediction_adjustment():
+
+    data = load_memory()
+
+    completed = data[
+        data["Completed"] == True
+    ]
+
+    if completed.empty:
+        return 0
+
+    return completed[
+        "Residual_Percent"
+    ].mean()
