@@ -1803,8 +1803,8 @@ else:
     ):
 
         with st.expander(
-    "⚛️ Quantum Decision Trace"
-):
+            "⚛️ Quantum Decision Trace"
+        ):
 
     metadata = forecast["model_metadata"]
 
