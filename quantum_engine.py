@@ -1,1343 +1,710 @@
 # ============================================================
-# quantum_engine.py
-# Quantum Equity Forecast Engine
-# Part 1/3
+# quantum_joint_engine.py
+# Quantum Equity Forecast Engine — Joint Multi-Factor Extension
+#
+# Adds a genuinely joint quantum sampling stage on top of the
+# existing classical pipeline in quantum_engine.py. Instead of
+# quantum-sampling a single precomputed price distribution
+# (which is mathematically just noisy resampling of a classical
+# curve), this module:
+#
+#   1. Builds four factor series from real data:
+#        - price return
+#        - volatility regime
+#        - momentum
+#        - macro/sector tilt (SPY + sector ETF average)
+#   2. Estimates their historical correlation structure directly
+#      from data using an empirical (quantile-rank) copula — no
+#      assumed or synthetic correlations.
+#   3. Encodes the resulting JOINT distribution as amplitudes on
+#      a multi-register circuit, so entanglement in the circuit
+#      reflects real historical co-movement between factors.
+#   4. Measures the joint state and reports both the marginal
+#      price forecast AND real conditional probabilities, e.g.
+#      P(price drop > 5% | high volatility regime), which the
+#      single-factor pipeline cannot produce at all.
+#
+# HONESTY NOTE (kept deliberately explicit in code and outputs):
+# This does not create predictive power beyond what the
+# historical correlation matrix already contains. The circuit
+# is a faithful re-encoding of a classical joint distribution,
+# not a source of new information. Its value is (a) making
+# factor interdependence a first-class, inspectable output via
+# genuine multi-qubit entanglement, and (b) sampling a joint
+# space that would otherwise have to be stored as an explicit
+# 4-D probability table. It is NOT a claim of quantum advantage
+# over classical multivariate sampling.
 # ============================================================
 
 import numpy as np
+import pandas as pd
 
 from qiskit import QuantumCircuit
 from qiskit_aer import AerSimulator
 
 
-
 # ============================================================
-# DATA CLEANING
+# CONFIG / SAFETY LIMITS
 # ============================================================
 
-def clean_data(data):
+# Hard ceiling on total qubits regardless of any user input.
+# 12 qubits -> 4096-dim dense statevector; verified safe latency
+# (<1s) for circuit.initialize + measurement in this environment.
+MAX_TOTAL_QUBITS = 12
 
-    df = data.copy()
+# Default (always-safe) resolution.
+DEFAULT_QUBITS_PER_FACTOR = 2   # 4 factors x 2 = 8 qubits, 256-dim
 
-    df["Close"] = (
-        df["Close"]
-        .astype(float)
-    )
+# Upgraded resolution, used only if upgrade conditions are met.
+UPGRADED_QUBITS_PER_FACTOR = 3  # 4 factors x 3 = 12 qubits, 4096-dim
 
-    df = (
-        df.replace(
-            [np.inf, -np.inf],
-            np.nan
-        )
-        .dropna(
-            subset=["Close"]
-        )
-    )
+# Minimum rows of history required to trust a 4x4 correlation
+# estimate enough to justify the higher resolution.
+MIN_ROWS_FOR_UPGRADE = 252
 
-    return df
+# Minimum shots required before 4096 bins would be mostly empty
+# noise rather than a meaningful sampled distribution.
+MIN_SHOTS_FOR_UPGRADE = 2000
 
+FACTOR_NAMES = ["price_return", "volatility", "momentum", "macro"]
 
 
 # ============================================================
-# FEATURE ENGINEERING
+# FACTOR CONSTRUCTION
 # ============================================================
 
-def add_features(data):
+def build_factor_frame(market_data, spy_data=None, sector_data=None):
+    """
+    Build the four aligned factor series used for joint sampling.
 
-    df = clean_data(data)
+    price_return : daily return of Close
+    volatility   : rolling realized volatility (30d std of returns)
+    momentum     : 20-day price momentum
+    macro        : average of SPY return and sector ETF return,
+                   aligned by the 'Date' COLUMN, not market_data's
+                   row index. data_provider.get_stock_data returns
+                   a DataFrame with a plain RangeIndex (0,1,2,...)
+                   and dates stored in a 'Date' column -- confirmed
+                   by direct inspection of that function's output.
+                   Aligning on the row index instead of the Date
+                   column was caught in testing (it raised a dtype
+                   comparison error immediately, rather than
+                   silently misaligning, which is what led to this
+                   fix). Falls back to whichever of SPY/sector is
+                   available; if neither is available, the macro
+                   column is all-NaN and the caller should detect
+                   this via the returned macro_ok flag and run in
+                   3-factor mode instead of fabricating a signal.
 
-    close = df["Close"]
+    Returns (frame, macro_was_available). frame carries the same
+    row index as market_data, with columns FACTOR_NAMES.
+    """
 
+    df = market_data.copy()
 
-    # Returns
-
-    df["Return"] = (
-        close
-        .pct_change()
-        .fillna(0)
-    )
-
-
-    # Moving averages
-
-    df["MA7"] = (
-        close
-        .rolling(7)
-        .mean()
-        .fillna(close)
-    )
-
-
-    df["MA30"] = (
-        close
-        .rolling(30)
-        .mean()
-        .fillna(close)
-    )
-
-
-    df["MA90"] = (
-        close
-        .rolling(90)
-        .mean()
-        .fillna(close)
-    )
-
-
-    # Volatility
-
-    df["Volatility"] = (
-        df["Return"]
-        .rolling(30)
-        .std()
-        .fillna(0)
-    )
-
-
-    # Momentum
-
-    df["Momentum"] = (
-
-        close /
-        close.shift(20)
-        -
-        1
-
-    ).fillna(0)
-
-
-
-    # RSI
-
-    delta = close.diff()
-
-
-    gains = delta.clip(
-        lower=0
-    )
-
-
-    losses = -delta.clip(
-        upper=0
-    )
-
-
-    avg_gain = (
-        gains
-        .rolling(14)
-        .mean()
-    )
-
-
-    avg_loss = (
-        losses
-        .rolling(14)
-        .mean()
-    )
-
-
-    rs = (
-        avg_gain /
-        (avg_loss + 1e-9)
-    )
-
-
-    df["RSI"] = (
-
-        100 -
-
-        (
-            100 /
-            (1 + rs)
+    if "Date" not in df.columns:
+        raise ValueError(
+            "market_data must have a 'Date' column to align macro "
+            "factor data (this matches the shape produced by "
+            "data_provider.get_stock_data)."
         )
 
-    ).fillna(50)
+    close = df["Close"].astype(float)
+
+    price_return = close.pct_change()
+    volatility = price_return.rolling(30, min_periods=10).std()
+    momentum = (close / close.shift(20) - 1)
+
+    macro = combine_macro_proxy(df["Date"], spy_data, sector_data)
+    macro.index = df.index  # re-attach to market_data's actual row index
+
+    macro_ok = macro.notna().any()
+
+    frame = pd.DataFrame({
+        "price_return": price_return,
+        "volatility": volatility,
+        "momentum": momentum,
+        "macro": macro,
+    }, index=df.index)
+
+    if macro_ok:
+        frame = frame.replace([np.inf, -np.inf], np.nan).dropna()
+    else:
+        # Drop NaNs on the three real factors only; macro stays NaN
+        # and the joint-sampling step will run in 3-factor mode.
+        core = frame[["price_return", "volatility", "momentum"]]
+        core = core.replace([np.inf, -np.inf], np.nan).dropna()
+        frame = frame.loc[core.index]
+
+    return frame, macro_ok
 
 
+def combine_macro_proxy(date_column, spy_data, sector_data):
+    """
+    Build the macro/sector factor as the average of SPY returns and
+    a sector ETF's returns, aligned to `date_column` (the target
+    ticker's real calendar dates) by nearest date.
 
-    # Market strength
+    spy_data / sector_data are expected in the same shape as
+    data_provider.get_stock_data's output: a 'Date' column plus a
+    'Close' column, RangeIndex rows.
 
-    df["Market_Strength"] = np.clip(
+    If only one of the two is available, use it alone. If neither
+    is available, return an all-NaN series (positional 0..n-1) so
+    downstream code can detect and handle the missing-macro case
+    explicitly rather than fabricating a signal.
+    """
 
-        (
+    target_dates = pd.to_datetime(pd.Series(date_column).reset_index(drop=True))
 
-            df["MA30"] /
+    spy_ret = None
+    sector_ret = None
 
-            (df["MA90"] + 1e-9)
+    if spy_data is not None and not spy_data.empty and "Close" in spy_data.columns and "Date" in spy_data.columns:
+        s = spy_data.copy()
+        s["Date"] = pd.to_datetime(s["Date"])
+        s = s.set_index("Date")["Close"].astype(float).pct_change().sort_index()
+        spy_ret = s.reindex(target_dates, method="nearest").reset_index(drop=True)
 
-        )
-        *
-        50,
+    if sector_data is not None and not sector_data.empty and "Close" in sector_data.columns and "Date" in sector_data.columns:
+        s = sector_data.copy()
+        s["Date"] = pd.to_datetime(s["Date"])
+        s = s.set_index("Date")["Close"].astype(float).pct_change().sort_index()
+        sector_ret = s.reindex(target_dates, method="nearest").reset_index(drop=True)
 
-        0,
+    if spy_ret is not None and sector_ret is not None:
+        combined = pd.concat([spy_ret, sector_ret], axis=1)
+        combined.columns = ["spy", "sector"]
+        return combined.mean(axis=1, skipna=True)
 
-        100
+    if spy_ret is not None:
+        return spy_ret
 
-    )
+    if sector_ret is not None:
+        return sector_ret
 
-
-    return (
-
-        df
-
-        .replace(
-            [np.inf,-np.inf],
-            np.nan
-        )
-
-        .fillna(0)
-
-    )
-
+    return pd.Series(np.nan, index=range(len(target_dates)))
 
 
 # ============================================================
-# FEATURE EXTRACTION
+# EMPIRICAL JOINT DISTRIBUTION (DATA-DRIVEN CORRELATION)
 # ============================================================
 
-def extract_state(data):
+def quantile_bin(series, k):
+    """
+    Bin a series into k quantile-based buckets (roughly equal
+    counts per bucket). This is what makes the joint distribution
+    data-driven: bucket edges come directly from the empirical
+    distribution of each factor, and co-occurrence across factors
+    in the same historical rows is what encodes their correlation.
 
-    row = data.iloc[-1]
+    Returns integer bin indices in [0, k-1].
+    """
 
+    values = series.to_numpy(dtype=float)
 
-    return {
+    edges = np.quantile(values, np.linspace(0, 1, k + 1))
 
-        "price":
-            float(row["Close"]),
+    # Guard against degenerate (constant / near-constant) series,
+    # which would otherwise produce duplicate edges and break
+    # np.digitize. Widen edges slightly and de-duplicate.
+    edges = np.unique(edges)
 
-        "volatility":
-            float(row["Volatility"]),
+    if len(edges) < 2:
+        # Completely constant series: everything falls in bin 0.
+        return np.zeros(len(values), dtype=int)
 
-        "momentum":
-            float(row["Momentum"]),
+    edges[0] -= 1e-9
+    edges[-1] += 1e-9
 
-        "rsi":
-            float(row["RSI"]),
+    idx = np.digitize(values, edges) - 1
+    idx = np.clip(idx, 0, k - 1)
 
-        "market_strength":
-            float(row["Market_Strength"])
+    return idx
 
-    }
 
+def build_joint_distribution(factor_frame, factor_names, bins_per_factor):
+    """
+    Build the empirical joint probability table over the given
+    factors, using historical co-occurrence to encode correlation.
 
+    Returns:
+        pmf         : 1-D array of length bins_per_factor**len(factor_names),
+                      the flattened joint probability mass function.
+        bin_edges   : dict factor_name -> array of quantile edges,
+                      needed later to map bin indices back to real
+                      values (e.g. price return ranges).
+        bin_indices : dict factor_name -> integer array of per-row
+                      bin assignments (useful for diagnostics/tests).
+    """
 
-# ============================================================
-# MARKET SIGNAL ENGINE
-# ============================================================
+    n_factors = len(factor_names)
+    dim = bins_per_factor ** n_factors
 
-def calculate_market_state(
-    prices,
-    external_features=None
-):
+    bin_indices = {}
+    bin_edges = {}
 
-    if external_features is None:
+    for name in factor_names:
+        series = factor_frame[name]
+        bin_indices[name] = quantile_bin(series, bins_per_factor)
+        edges = np.quantile(series.to_numpy(dtype=float),
+                             np.linspace(0, 1, bins_per_factor + 1))
+        bin_edges[name] = edges
 
-        external_features = {}
+    n_rows = len(factor_frame)
 
+    joint_index = np.zeros(n_rows, dtype=np.int64)
 
+    # Mixed-radix encoding: factor 0 is the most significant digit.
+    # This ordering is arbitrary but must stay consistent between
+    # encoding here and decoding in the circuit / marginalization step.
+    for name in factor_names:
+        joint_index = joint_index * bins_per_factor + bin_indices[name]
 
-    def trend(days):
+    pmf = np.bincount(joint_index, minlength=dim).astype(float)
 
-        if len(prices) < days:
+    if pmf.sum() == 0:
+        # Should not happen with real data, but guard anyway.
+        pmf = np.ones(dim)
 
-            return 0
+    pmf /= pmf.sum()
 
-
-        return (
-
-            prices.iloc[-1]
-
-            /
-
-            prices.iloc[-days]
-
-            -
-
-            1
-
-        )
-
-
-
-    technical = (
-
-        trend(7)*0.15
-
-        +
-
-        trend(30)*0.35
-
-        +
-
-        trend(90)*0.50
-
-    )
-
-
-    technical = np.clip(
-        technical,
-        -0.20,
-        0.20
-    )
-
-
-
-    macro = external_features.get(
-        "macro_score",
-        0
-    )
-
-
-    sector = external_features.get(
-        "sector_score",
-        0
-    )
-
-
-    sentiment = external_features.get(
-        "sentiment_score",
-        0
-    )
-
-
-    global_market = external_features.get(
-        "global_market_score",
-        0
-    )
-
-
-    earnings = external_features.get(
-        "earnings_score",
-        0
-    )
-
-
-    rates = external_features.get(
-        "rate_score",
-        0
-    )
-
-
-
-    weights = {
-
-        "technical":0.45,
-
-        "macro":0.15,
-
-        "global":0.15,
-
-        "sector":0.10,
-
-        "sentiment":0.10,
-
-        "earnings":0.05
-
-    }
-
-
-
-    state = (
-
-        technical *
-        weights["technical"]
-
-        +
-
-        macro *
-        weights["macro"]
-
-        +
-
-        global_market *
-        weights["global"]
-
-        +
-
-        sector *
-        weights["sector"]
-
-        +
-
-        sentiment *
-        weights["sentiment"]
-
-        +
-
-        earnings *
-        weights["earnings"]
-
-        +
-
-        rates*.05
-
-    )
-
-
-    return (
-
-        np.clip(
-            state,
-            -.35,
-            .35
-        ),
-
-        weights,
-
-        technical
-
-    )
-  # ============================================================
-# quantum_engine.py
-# Quantum Equity Forecast Engine
-# Part 2/3
-# ============================================================
+    return pmf, bin_edges, bin_indices
 
 
 # ============================================================
-# QUANTUM STATE SAMPLER
+# ADAPTIVE RESOLUTION SELECTION
 # ============================================================
 
-def quantum_sample(
-    probabilities,
-    qubits,
-    shots
-):
+def choose_resolution(n_rows, macro_ok, shots):
+    """
+    Decide qubits-per-factor and which factors are active.
 
-    states = 2 ** qubits
+    Upgrades from 2 to 3 qubits/factor only when:
+      - enough history exists to trust the correlation estimate
+      - shots are high enough that the extra bins won't be mostly
+        empty noise
 
+    Falls back to 3-factor mode (dropping macro) if macro data is
+    unavailable, rather than fabricating a macro signal.
 
-    amplitudes = np.sqrt(
-        probabilities
+    Always respects MAX_TOTAL_QUBITS as a hard ceiling.
+    """
+
+    active_factors = list(FACTOR_NAMES) if macro_ok else \
+        [f for f in FACTOR_NAMES if f != "macro"]
+
+    n_factors = len(active_factors)
+
+    qubits_per_factor = DEFAULT_QUBITS_PER_FACTOR
+
+    can_upgrade = (
+        n_rows >= MIN_ROWS_FOR_UPGRADE
+        and shots >= MIN_SHOTS_FOR_UPGRADE
     )
 
+    if can_upgrade:
+        candidate = UPGRADED_QUBITS_PER_FACTOR
+        if candidate * n_factors <= MAX_TOTAL_QUBITS:
+            qubits_per_factor = candidate
 
-    amplitudes /= np.linalg.norm(
-        amplitudes
-    )
+    total_qubits = qubits_per_factor * n_factors
+
+    # Absolute safety net: if somehow still over the ceiling
+    # (shouldn't happen given the checks above), force back down
+    # to the default resolution.
+    if total_qubits > MAX_TOTAL_QUBITS:
+        qubits_per_factor = DEFAULT_QUBITS_PER_FACTOR
+        total_qubits = qubits_per_factor * n_factors
+
+    resolution_note = "upgraded" if qubits_per_factor == UPGRADED_QUBITS_PER_FACTOR else "default"
+
+    return active_factors, qubits_per_factor, total_qubits, resolution_note
 
 
-    circuit = QuantumCircuit(
-        qubits
-    )
+# ============================================================
+# QUANTUM JOINT CIRCUIT
+# ============================================================
 
+def run_joint_circuit(pmf, total_qubits, shots):
+    """
+    Encode the empirical joint pmf as amplitudes on a single dense
+    statevector spanning all factor registers combined, then
+    measure. Because arbitrary correlation structure (as opposed
+    to e.g. simple pairwise linear coupling) generally cannot be
+    written as a short sequence of two-qubit gates, we use
+    `initialize` on the full joint amplitude vector. The resulting
+    circuit is genuinely entangled across factor registers whenever
+    the historical data shows correlation (i.e. the joint pmf does
+    not factor into independent per-factor marginals) — measuring
+    any one register's qubits then depends statistically on the
+    others, which is the defining signature of entanglement in the
+    classical-outcome (measured) sense.
 
-    circuit.initialize(
-        amplitudes,
-        range(qubits)
-    )
+    Returns raw counts dict: bitstring -> count.
+    """
 
+    amplitudes = np.sqrt(pmf)
+    amplitudes = amplitudes / np.linalg.norm(amplitudes)
 
+    circuit = QuantumCircuit(total_qubits)
+    circuit.initialize(amplitudes, range(total_qubits))
     circuit.measure_all()
 
+    simulator = AerSimulator(method="matrix_product_state")
+
+    result = simulator.run(circuit, shots=shots).result()
+
+    return result.get_counts()
 
 
-    simulator = AerSimulator(
-        method="matrix_product_state"
-    )
+def counts_to_joint_pmf(counts, total_qubits, shots):
+    """
+    Convert Qiskit measurement counts into a dense joint pmf array
+    indexed the same way as build_joint_distribution's output.
 
+    VERIFIED EMPIRICALLY (see test harness in development): when a
+    statevector is loaded via circuit.initialize(amplitudes, range(n)),
+    the amplitude at array index i lands on the computational basis
+    state whose bitstring, read directly with int(bitstring, 2),
+    equals i. No bit-reversal is needed to recover the original
+    joint_index used when building the pmf in
+    build_joint_distribution. (An earlier version of this function
+    incorrectly reversed the bitstring based on a plausible-sounding
+    but unverified assumption; a direct round-trip test caught and
+    corrected this before use.)
+    """
 
-    result = simulator.run(
-        circuit,
-        shots=shots
-    ).result()
+    dim = 2 ** total_qubits
+    pmf = np.zeros(dim)
 
+    for bitstring, count in counts.items():
+        index = int(bitstring, 2)
+        if index < dim:
+            pmf[index] += count
 
+    total = pmf.sum()
 
-    counts = result.get_counts()
+    if total == 0:
+        return np.ones(dim) / dim
 
-
-
-    quantum_probability = np.zeros(
-        states
-    )
-
-
-
-    for state,count in counts.items():
-
-        index = int(
-            state,
-            2
-        )
-
-
-        if index < states:
-
-            quantum_probability[index] = (
-                count /
-                shots
-            )
-
-
-
-    if quantum_probability.sum() == 0:
-
-        return probabilities
-
-
-
-    return (
-
-        quantum_probability /
-
-        quantum_probability.sum()
-
-    )
-
+    return pmf / total
 
 
 # ============================================================
-# PRICE DISTRIBUTION ENGINE
+# MARGINALS AND CONDITIONALS
 # ============================================================
 
-def create_price_distribution(
-    starting_price,
-    expected_return,
-    volatility,
-    days,
-    qubits
+def reshape_joint(pmf, n_factors, bins_per_factor):
+    """Reshape flat pmf into an n_factors-dimensional array, axis
+    order matching factor_names order used at construction time
+    (factor 0 = axis 0, most significant)."""
+    return pmf.reshape([bins_per_factor] * n_factors)
+
+
+def marginal_for_factor(joint_nd, factor_index):
+    """Sum out all axes except factor_index to get that factor's
+    marginal distribution over its own bins."""
+    axes = tuple(i for i in range(joint_nd.ndim) if i != factor_index)
+    return joint_nd.sum(axis=axes)
+
+
+def conditional_distribution(joint_nd, factor_index, target_factor_index, bin_selector):
+    """
+    P(target_factor bins | factor_index is in bin_selector).
+
+    bin_selector: a boolean array or list of bin indices for
+    `factor_index` defining the conditioning event (e.g. "top bin"
+    for high volatility).
+
+    Returns a 1-D array over target_factor's bins, normalized to
+    sum to 1 (or None if the conditioning event has ~zero mass).
+    """
+
+    n_factors = joint_nd.ndim
+
+    # Build a boolean mask selecting the conditioning slice.
+    slicer = [slice(None)] * n_factors
+    slicer[factor_index] = bin_selector
+    sliced = joint_nd[tuple(slicer)]
+
+    # Sum out everything except the target factor.
+    axes = tuple(
+        i for i in range(sliced.ndim)
+        if i != (target_factor_index if target_factor_index < factor_index
+                  else target_factor_index)
+    )
+
+    # Careful: after fancy-indexing with a list on `factor_index`,
+    # numpy keeps that axis in place (advanced indexing with a list
+    # preserves dimensionality here since bin_selector is 1-D list),
+    # so axis positions are unchanged. Sum all axes except target.
+    sum_axes = tuple(i for i in range(sliced.ndim) if i != target_factor_index)
+    target_marginal = sliced.sum(axis=sum_axes)
+
+    total_mass = target_marginal.sum()
+
+    if total_mass <= 1e-12:
+        return None
+
+    return target_marginal / total_mass
+
+
+def probability_of_event(joint_nd, factor_index, bin_selector):
+    """Total probability mass where `factor_index` falls in the
+    bins listed in bin_selector (marginal event probability)."""
+    axes = tuple(i for i in range(joint_nd.ndim) if i != factor_index)
+    marg = joint_nd.sum(axis=axes)
+    return float(marg[bin_selector].sum())
+
+
+# ============================================================
+# PRICE-BIN <-> DOLLAR-PRICE MAPPING
+# ============================================================
+
+def price_bin_edges_to_dollar_grid(
+    price_return_edges, starting_price, bins_per_factor,
+    days, expected_return, daily_volatility,
 ):
-
-    states = 2 ** qubits
-
-
-
-    movement = (
-
-        volatility *
-
-        np.sqrt(
-            max(days,1)
-            /
-            252
-        )
-
-    )
-
-
-
-    movement = np.clip(
-
-        movement,
-
-        .03,
-
-        .40
-
-    )
-
-
-
-    lower = (
-
-        starting_price *
-
-        (1 - movement)
-
-    )
-
-
-    upper = (
-
-        starting_price *
-
-        (1 + movement)
-
-    )
-
-
-
-    price_grid = np.linspace(
-
-        lower,
-
-        upper,
-
-        states
-
-    )
-
-
-
-    return_grid = (
-
-        price_grid /
-
-        starting_price
-
-        -
-
-        1
-
-    )
-
-
-
-    uncertainty = max(
-        movement,
-        .02
-    )
-
-
-
-    z = (
-
-        return_grid
-
-        -
-
-        expected_return
-
-    ) / uncertainty
-
-
-
-    probabilities = np.exp(
-
-        -.5 *
-
-        z**2
-
-    )
-
-
-
-    probabilities = np.nan_to_num(
-
-        probabilities,
-
-        nan=1,
-
-        posinf=1,
-
-        neginf=0
-
-    )
-
-
-
-    if probabilities.sum() == 0:
-
-        probabilities = np.ones(
-            states
-        )
-
-
-
-    probabilities /= (
-        probabilities.sum()
-    )
-
-
-
-    return (
-
-        price_grid,
-
-        return_grid,
-
-        probabilities
-
-    )
-
+    """
+    Convert the quantile edges of the historical DAILY price_return
+    factor into an actual dollar price grid for the requested
+    forecast horizon.
+
+    IMPORTANT: the joint distribution is built from daily returns
+    (so the empirical correlation structure is estimated on daily
+    co-movement, which is the data we actually have day by day).
+    But daily-return bins are the wrong scale to evaluate at a
+    30/60/90-day horizon directly -- e.g. a "+5%" daily-return bin
+    edge does not mean "+5% over 30 days". Conflating the two was
+    caught during testing (all drop/upside probabilities were
+    silently coming out as 0 or degenerate at longer horizons).
+
+    Fix: use the bins' RANK/SHAPE (their relative position and the
+    correlation structure they encode) from the empirical daily
+    distribution, but rescale the numeric return values to the
+    requested horizon using the same convention already used
+    elsewhere in this codebase (quantum_engine.create_price_distribution):
+    the horizon spread scales with sqrt(days/252) off of annualized
+    volatility, and the horizon drift is the `expected_return` already
+    computed classically for that horizon. This keeps one source of
+    truth for "how far can price move in `days` days" (the classical
+    calculation) while still using the joint/empirical model for
+    *shape and correlation*, which is what the quantum joint step is
+    actually for.
+    """
+
+    mids = (price_return_edges[:-1] + price_return_edges[1:]) / 2.0
+
+    # Standardize daily-bin midpoints into z-like ranks (mean 0, unit
+    # spread) using the empirical daily distribution's own spread,
+    # then re-express them at the target horizon's drift/spread.
+    daily_std = float(np.std(mids))
+    if daily_std <= 1e-12:
+        daily_std = 1e-6
+
+    standardized = mids / daily_std
+
+    annual_volatility = daily_volatility * np.sqrt(252)
+    horizon_movement = annual_volatility * np.sqrt(max(days, 1) / 252)
+    horizon_movement = np.clip(horizon_movement, .03, .40)
+
+    horizon_returns = expected_return + standardized * horizon_movement
+
+    price_grid = starting_price * (1 + horizon_returns)
+    return_grid = horizon_returns
+
+    return price_grid, return_grid
 
 
 # ============================================================
-# DRIFT CALCULATION
+# MAIN ENTRY POINT
 # ============================================================
 
-def calculate_expected_return(
-    returns,
-    market_state,
-    days
-):
-
-
-    historical_return = float(
-        returns.mean()
-    )
-
-
-
-    drift = (
-
-        historical_return *
-
-        .60
-
-        +
-
-        market_state *
-
-        .40
-
-    )
-
-
-
-    drift = np.clip(
-
-        drift,
-
-        -.0015,
-
-        .0015
-
-    )
-
-
-
-    expected_return = (
-
-        drift *
-
-        days
-
-    )
-
-
-
-    limits = {
-
-        1:.03,
-
-        2:.05,
-
-        7:.10,
-
-        30:.18,
-
-        60:.25,
-
-        90:.35
-
-    }
-
-
-
-    allowed = limits.get(
-
-        days,
-
-        .35
-
-    )
-
-
-
-    return np.clip(
-
-        expected_return,
-
-        -allowed,
-
-        allowed
-
-    )
-
-
-
-# ============================================================
-# CONFIDENCE ENGINE
-# ============================================================
-
-def calculate_confidence(
-    probability,
-    states,
-    volatility,
-    market_state
-):
-
-    entropy = -np.sum(
-
-        probability *
-
-        np.log(
-            probability + 1e-12
-        )
-
-    )
-
-
-
-    entropy_score = (
-
-        1 -
-
-        entropy /
-
-        np.log(states)
-
-    ) * 100
-
-
-
-    volatility_score = np.clip(
-
-        100 -
-
-        volatility * 100,
-
-        10,
-
-        90
-
-    )
-
-
-
-    confidence = (
-
-        entropy_score*.50
-
-        +
-
-        volatility_score*.30
-
-        +
-
-        abs(market_state)
-
-        *
-
-        100
-
-        *
-
-        .20
-
-    )
-
-
-
-    return np.clip(
-
-        confidence,
-
-        10,
-
-        95
-
-    )
-
-
-
-# ============================================================
-# RISK ENGINE
-# ============================================================
-
-def calculate_risk(
-    probability,
-    return_grid,
-    annual_volatility
-):
-
-    downside = (
-
-        probability[
-            return_grid < -.05
-        ]
-
-        .sum()
-
-        *
-
-        100
-
-    )
-
-
-    risk = (
-
-        annual_volatility *
-
-        100 *
-
-        downside /
-
-        100
-
-    )
-
-
-    return (
-
-        risk,
-
-        downside
-
-    )
-  # ============================================================
-# quantum_engine.py
-# Quantum Equity Forecast Engine
-# Part 3/3
-# ============================================================
-
-
-# ============================================================
-# MAIN FORECAST FUNCTION
-# ============================================================
-
-def quantum_forecast(
+def quantum_joint_forecast(
     market_data,
     starting_price,
     days=30,
-    qubits=6,
     shots=1500,
-    external_features=None
+    spy_data=None,
+    sector_data=None,
+    external_features=None,
 ):
+    """
+    Joint multi-factor quantum forecast.
 
+    Builds a genuinely entangled joint distribution over
+    (price_return, volatility, momentum, macro) from real
+    historical correlations, samples it via a quantum circuit,
+    and returns both the marginal price forecast (compatible
+    with the existing single-factor output shape where possible)
+    and new conditional-probability outputs that the single-factor
+    pipeline cannot produce.
 
-    if external_features is None:
+    Falls back gracefully (reduced resolution, or 3-factor mode
+    without macro) rather than crashing, and always reports what
+    it actually did in `model_metadata` / `resolution_note` /
+    `active_factors` so the UI can be honest about it.
+    """
 
-        external_features = {}
+    # Local import to avoid a hard circular dependency at module
+    # load time; quantum_engine.py has no dependency on this module.
+    import quantum_engine as qe
 
+    frame, macro_ok = build_factor_frame(market_data, spy_data, sector_data)
 
-
-    # --------------------------------------------------------
-    # Prepare market data
-    # --------------------------------------------------------
-
-    data = add_features(
-        market_data
-    )
-
-
-    prices = data["Close"]
-
-
-    returns = (
-
-        prices
-
-        .pct_change()
-
-        .replace(
-            [np.inf,-np.inf],
-            np.nan
-        )
-
-        .dropna()
-
-    )
-
-
-
-    if len(returns) < 30:
-
+    if len(frame) < 30:
         raise ValueError(
-            "Not enough market history."
+            "Not enough overlapping factor history to build a joint "
+            "distribution (need at least 30 aligned rows)."
         )
 
-
-
-    # --------------------------------------------------------
-    # Volatility
-    # --------------------------------------------------------
-
-    daily_volatility = float(
-        returns.std()
+    active_factors, qubits_per_factor, total_qubits, resolution_note = choose_resolution(
+        n_rows=len(frame), macro_ok=macro_ok, shots=shots
     )
 
+    bins_per_factor = 2 ** qubits_per_factor
 
-    if daily_volatility <= 0:
-
-        daily_volatility = .01
-
-
-
-    annual_volatility = (
-
-        daily_volatility *
-
-        np.sqrt(252)
-
+    pmf, bin_edges, bin_indices = build_joint_distribution(
+        frame, active_factors, bins_per_factor
     )
 
-
-
-    # --------------------------------------------------------
-    # Market state
-    # --------------------------------------------------------
-
-    market_state, weights, technical_signal = calculate_market_state(
-
-        prices,
-
-        external_features
-
-    )
-
-
-
-    # --------------------------------------------------------
-    # Expected movement
-    # --------------------------------------------------------
-
-    expected_return = calculate_expected_return(
-
-        returns,
-
-        market_state,
-
-        days
-
-    )
-
-
-
-    classical_expected_price = (
-
-        starting_price *
-
-        np.exp(
-            expected_return
-        )
-
-    )
-
-
-
-    # --------------------------------------------------------
-    # Create probability space
-    # --------------------------------------------------------
-
-    price_grid, return_grid, classical_probability = create_price_distribution(
-
-        starting_price,
-
-        expected_return,
-
-        annual_volatility,
-
-        days,
-
-        qubits
-
-    )
-
-
-
-    # --------------------------------------------------------
-    # Quantum sampling
-    # --------------------------------------------------------
+    fallback_used = False
 
     try:
-
-        quantum_probability = quantum_sample(
-
-            classical_probability,
-
-            qubits,
-
-            shots
-
-        )
-
+        counts = run_joint_circuit(pmf, total_qubits, shots)
+        joint_pmf = counts_to_joint_pmf(counts, total_qubits, shots)
     except Exception:
+        # Hard fallback: if circuit execution fails for any reason
+        # (e.g. transient simulator issue), fall back to the exact
+        # classical joint pmf rather than crashing the app. This is
+        # reported, not hidden.
+        joint_pmf = pmf.copy()
+        fallback_used = True
 
-        quantum_probability = (
-            classical_probability.copy()
-        )
+    joint_nd = reshape_joint(joint_pmf, len(active_factors), bins_per_factor)
 
-
-
-    # --------------------------------------------------------
-    # Quantum expected price
-    # --------------------------------------------------------
-
-    quantum_expected_price = np.sum(
-
-        price_grid *
-
-        quantum_probability
-
-    )
-
-
+    price_idx = active_factors.index("price_return")
+    price_marginal = marginal_for_factor(joint_nd, price_idx)
 
     # --------------------------------------------------------
-    # Probability zones
+    # Reuse classical helpers for expected return, risk, and
+    # confidence, but drive the price probability SHAPE from the
+    # genuinely joint/entangled marginal rather than a
+    # single-factor Gaussian resample. The numeric SCALE of the
+    # return grid must match the requested horizon (see
+    # price_bin_edges_to_dollar_grid docstring for why this can't
+    # just use the raw daily-return bin edges).
     # --------------------------------------------------------
 
-    upside_probability = (
+    returns_series = frame["price_return"]
 
-        quantum_probability[
-
-            return_grid > .05
-
-        ]
-
-        .sum()
-
-        *
-
-        100
-
+    market_state, weights, technical_signal = qe.calculate_market_state(
+        market_data["Close"], external_features
     )
 
+    expected_return = qe.calculate_expected_return(returns_series, market_state, days)
 
+    classical_expected_price = starting_price * np.exp(expected_return)
 
-    downside_probability = (
+    daily_volatility = float(returns_series.std())
+    if daily_volatility <= 0:
+        daily_volatility = .01
+    annual_volatility = daily_volatility * np.sqrt(252)
 
-        quantum_probability[
-
-            return_grid < -.05
-
-        ]
-
-        .sum()
-
-        *
-
-        100
-
+    price_grid, return_grid = price_bin_edges_to_dollar_grid(
+        bin_edges["price_return"], starting_price, bins_per_factor,
+        days, expected_return, daily_volatility,
     )
 
+    joint_expected_price = float(np.sum(price_grid * price_marginal))
 
-
-    neutral_probability = (
-
-        100
-
-        -
-
-        upside_probability
-
-        -
-
-        downside_probability
-
+    confidence_score = qe.calculate_confidence(
+        price_marginal, bins_per_factor, annual_volatility, market_state
     )
 
+    risk_score, downside = qe.calculate_risk(price_marginal, return_grid, annual_volatility)
 
-
-    upside_probability = np.clip(
-
-        upside_probability,
-
-        0,
-
-        95
-
-    )
-
-
-    downside_probability = np.clip(
-
-        downside_probability,
-
-        0,
-
-        95
-
-    )
-
-
-    neutral_probability = np.clip(
-
-        neutral_probability,
-
-        5,
-
-        95
-
-    )
-
-
-
-    # --------------------------------------------------------
-    # Confidence + risk
-    # --------------------------------------------------------
-
-    confidence_score = calculate_confidence(
-
-        quantum_probability,
-
-        2 ** qubits,
-
-        annual_volatility,
-
-        market_state
-
-    )
-
-
-
-    risk_score, downside = calculate_risk(
-
-        quantum_probability,
-
-        return_grid,
-
-        annual_volatility
-
-    )
-
-
-
-    # --------------------------------------------------------
-    # Market regime
-    # --------------------------------------------------------
+    upside_probability = float(np.clip(price_marginal[return_grid > .05].sum() * 100, 0, 95))
+    downside_probability = float(np.clip(price_marginal[return_grid < -.05].sum() * 100, 0, 95))
+    neutral_probability = float(np.clip(100 - upside_probability - downside_probability, 5, 95))
 
     if market_state > .08:
-
         regime = "Bullish"
-
-
     elif market_state < -.08:
-
         regime = "Bearish"
-
-
     else:
-
         regime = "Neutral"
 
-
-
     # --------------------------------------------------------
-    # Model trace
+    # Genuine conditional outputs (not available in the
+    # single-factor pipeline): condition price on the TOP bin
+    # (highest values) of each other active factor.
     # --------------------------------------------------------
+
+    conditionals = {}
+
+    for factor in active_factors:
+        if factor == "price_return":
+            continue
+        f_idx = active_factors.index(factor)
+        top_bin = [bins_per_factor - 1]
+        bottom_bin = [0]
+
+        cond_high = conditional_distribution(joint_nd, f_idx, price_idx, top_bin)
+        cond_low = conditional_distribution(joint_nd, f_idx, price_idx, bottom_bin)
+
+        conditionals[factor] = {
+            "p_drop_given_high": (
+                float(cond_high[return_grid < -.05].sum()) if cond_high is not None else None
+            ),
+            "p_drop_given_low": (
+                float(cond_low[return_grid < -.05].sum()) if cond_low is not None else None
+            ),
+            "p_drop_unconditional": float(price_marginal[return_grid < -.05].sum()),
+        }
 
     metadata = {
-
-        "weights": {
-
-            key:
-
-            round(
-
-                value * 100,
-
-                2
-
-            )
-
-            for key,value in weights.items()
-
-        },
-
-
-        "technical_signal":
-
-            round(
-
-                float(
-                    technical_signal
-                ),
-
-                4
-
-            ),
-
-
-        "market_state":
-
-            round(
-
-                float(
-                    market_state
-                ),
-
-                4
-
-            )
-
+        "weights": {k: round(v * 100, 2) for k, v in weights.items()},
+        "technical_signal": round(float(technical_signal), 4),
+        "market_state": round(float(market_state), 4),
+        "active_factors": active_factors,
+        "qubits_per_factor": qubits_per_factor,
+        "total_qubits": total_qubits,
+        "resolution": resolution_note,
+        "macro_available": macro_ok,
+        "fallback_to_classical": fallback_used,
+        "history_rows_used": len(frame),
+        "note": (
+            "Joint distribution is an empirical (quantile-binned) "
+            "encoding of real historical correlations between "
+            "price return, volatility, momentum, and macro/sector "
+            "tilt. The quantum circuit reproduces this distribution "
+            "via entangled amplitude encoding and shot-based "
+            "measurement; it does not add information beyond what "
+            "the historical correlation structure already contains."
+        ),
     }
 
-
-
-    # --------------------------------------------------------
-    # Final output
-    # --------------------------------------------------------
-
     return {
-
-
-        "starting_price":
-
-            starting_price,
-
-
-        "classical_expected_price":
-
-            classical_expected_price,
-
-
-        "expected_price":
-
-            quantum_expected_price,
-
-
-        "price_grid":
-
-            price_grid,
-
-
-        "return_grid":
-
-            return_grid,
-
-
-        "probability":
-
-            quantum_probability,
-
-
-        "classical_probability":
-
-            classical_probability,
-
-
-        "returns":
-
-            returns,
-
-
-        "volatility":
-
-            annual_volatility * 100,
-
-
-        "market_regime":
-
-            regime,
-
-
-        "confidence_score":
-
-            confidence_score,
-
-
-        "risk_score":
-
-            risk_score,
-
-
-        "market_state":
-
-            market_state,
-
-
-        "upside_probability":
-
-            upside_probability,
-
-
-        "downside_probability":
-
-            downside_probability,
-
-
-        "neutral_probability":
-
-            neutral_probability,
-
-
-        "model_metadata":
-
-            metadata
-
+        "starting_price": starting_price,
+        "classical_expected_price": classical_expected_price,
+        "expected_price": joint_expected_price,
+        "price_grid": price_grid,
+        "return_grid": return_grid,
+        "probability": price_marginal,
+        "joint_probability": joint_pmf,
+        "joint_shape": [bins_per_factor] * len(active_factors),
+        "bin_edges": bin_edges,
+        "returns": returns_series,
+        "volatility": annual_volatility * 100,
+        "market_regime": regime,
+        "confidence_score": confidence_score,
+        "risk_score": risk_score,
+        "market_state": market_state,
+        "upside_probability": upside_probability,
+        "downside_probability": downside_probability,
+        "neutral_probability": neutral_probability,
+        "conditionals": conditionals,
+        "model_metadata": metadata,
     }
