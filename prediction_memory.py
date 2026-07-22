@@ -1,8 +1,3 @@
-# ============================================================
-# PREDICTION_MEMORY.PY
-# Quantum Equity Forecast Memory Engine
-# ============================================================
-
 import os
 import uuid
 import json
@@ -12,7 +7,6 @@ from datetime import datetime
 
 
 MEMORY_FILE = "prediction_history.csv"
-
 
 COLUMNS = [
     "ID",
@@ -66,7 +60,6 @@ def save_memory(data):
             index=False
         )
         return True
-
     except Exception:
         return False
 
@@ -100,12 +93,8 @@ def save_prediction(
         "Absolute_Error_Percent": np.nan,
         "Confidence": float(confidence),
         "Quantum_Score": float(quantum_score),
-        "Signal_Weights": json.dumps(
-            signal_weights or {}
-        ),
-        "Feature_Importance": json.dumps(
-            feature_importance or {}
-        ),
+        "Signal_Weights": json.dumps(signal_weights or {}),
+        "Feature_Importance": json.dumps(feature_importance or {}),
         "Market_Regime": regime,
         "Volatility": float(volatility),
         "Model_Version": model_version,
@@ -123,65 +112,56 @@ def save_prediction(
     save_memory(history)
 
     return prediction["ID"]
-    def complete_prediction(
+
+
+def complete_prediction(
     prediction_id,
     actual_price
 ):
 
     history = load_memory()
 
-    matches = history.index[
+    match = history.index[
         history["ID"] == prediction_id
     ]
 
-    if len(matches) == 0:
+    if len(match) == 0:
         return False
 
-    index = matches[0]
+    i = match[0]
 
     predicted = float(
-        history.loc[index, "Predicted_Price"]
+        history.loc[i, "Predicted_Price"]
     )
 
     actual = float(actual_price)
 
     residual = actual - predicted
 
-    residual_percent = (
+    error = (
         residual / predicted * 100
         if predicted
         else 0
     )
 
-    error = abs(residual_percent)
-
-    updates = {
-        "Actual_Price": actual,
-        "Residual": residual,
-        "Residual_Percent": residual_percent,
-        "Absolute_Error_Percent": error,
-        "Completed": True
-    }
-
-    for key, value in updates.items():
-        history.loc[index, key] = value
+    history.loc[i, "Actual_Price"] = actual
+    history.loc[i, "Residual"] = residual
+    history.loc[i, "Residual_Percent"] = error
+    history.loc[i, "Absolute_Error_Percent"] = abs(error)
+    history.loc[i, "Completed"] = True
 
     return save_memory(history)
 
+
 def get_stock_history(ticker):
+    data = load_memory()
 
-    history = load_memory()
-
-    return history[
-        history["Ticker"] == ticker.upper()
+    return data[
+        data["Ticker"] == ticker.upper()
     ]
 
 
-
-def get_prediction_bias(
-    ticker,
-    horizon=None
-):
+def get_prediction_bias(ticker, horizon=None):
 
     data = get_stock_history(ticker)
 
@@ -197,17 +177,10 @@ def get_prediction_bias(
     if data.empty:
         return 0
 
-    return (
-        data.tail(50)["Residual"]
-        .mean()
-    )
+    return data.tail(50)["Residual"].mean()
 
 
-
-def get_model_accuracy(
-    ticker,
-    horizon=None
-):
+def get_model_accuracy(ticker, horizon=None):
 
     data = get_stock_history(ticker)
 
@@ -222,25 +195,18 @@ def get_model_accuracy(
 
     if data.empty:
         return {
-            "samples": 0,
-            "accuracy": 0,
-            "average_error": 0
+            "samples":0,
+            "accuracy":0,
+            "average_error":0
         }
 
-    error = (
-        data["Absolute_Error_Percent"]
-        .mean()
-    )
+    error = data["Absolute_Error_Percent"].mean()
 
     return {
-        "samples": len(data),
-        "accuracy": max(
-            0,
-            100 - error
-        ),
-        "average_error": error
+        "samples":len(data),
+        "accuracy":max(0,100-error),
+        "average_error":error
     }
-
 
 
 def get_recent_performance(ticker):
@@ -255,73 +221,24 @@ def get_recent_performance(ticker):
         return None
 
     return {
-        "bias":
-            data["Residual"].mean(),
-
-        "accuracy":
-            max(
-                0,
-                100 -
-                data["Absolute_Error_Percent"].mean()
-            ),
-
-        "samples":
-            len(data)
+        "bias":data["Residual"].mean(),
+        "accuracy":max(
+            0,
+            100-data["Absolute_Error_Percent"].mean()
+        ),
+        "samples":len(data)
     }
-
-
-
-def get_quantum_performance(ticker):
-
-    data = get_stock_history(ticker)
-
-    data = data[
-        data["Completed"] == True
-    ]
-
-    if data.empty:
-        return {}
-
-    return {
-        "average_quantum_score":
-            data["Quantum_Score"].mean(),
-
-        "average_confidence":
-            data["Confidence"].mean(),
-
-        "accuracy":
-            max(
-                0,
-                100 -
-                data["Absolute_Error_Percent"].mean()
-            ),
-
-        "samples":
-            len(data)
-    }
-
 
 
 def clean_memory(max_rows=10000):
 
-    history = load_memory()
+    data = load_memory()
 
-    if len(history) > max_rows:
-
-        history = history.tail(
-            max_rows
-        )
-
-        save_memory(history)
+    if len(data) > max_rows:
+        data = data.tail(max_rows)
+        save_memory(data)
 
     return True
-
-
-
-def export_memory():
-
-    return load_memory()
-
 
 
 def clear_memory():
