@@ -1802,21 +1802,67 @@ else:
         "⚛️ Quantum Model Metadata"
     ):
 
-        metadata = pd.DataFrame(
-            forecast["model_metadata"]
-            .items(),
-            columns=[
-                "Metric",
-                "Value"
+        with st.expander(
+    "⚛️ Quantum Decision Trace"
+):
+
+    metadata = forecast["model_metadata"]
+
+    weights = metadata["weights"]
+
+    weight_table = pd.DataFrame(
+        {
+            "Signal": [
+                "Technical",
+                "Macro",
+                "Global",
+                "Sector",
+                "Sentiment"
+            ],
+
+            "Weight": [
+                weights["technical"],
+                weights["macro"],
+                weights["global"],
+                weights["sector"],
+                weights["sentiment"]
             ]
+        }
+    )
+
+    weight_table["Weight"] = (
+        weight_table["Weight"] * 100
+    ).round(2).astype(str) + "%"
+
+
+    st.subheader(
+        "Signal Influence"
+    )
+
+    st.dataframe(
+        weight_table,
+        hide_index=True,
+        width="stretch"
+    )
+
+
+    col1, col2 = st.columns(2)
+
+
+    with col1:
+
+        st.metric(
+            "Technical Signal",
+            f"{metadata['technical_signal']:.3f}"
         )
 
 
-        st.dataframe(
-            metadata,
-            width="stretch"
-        )
+    with col2:
 
+        st.metric(
+            "Market State",
+            f"{metadata['market_state']:.3f}"
+        )
 
 
     # ========================================================
