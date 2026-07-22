@@ -1,273 +1,128 @@
-import os
-import uuid
+# ============================================================
+# PREDICTION MEMORY ENGINE
+# Adaptive Forecast Feedback System
+# ============================================================
+
 import json
-import pandas as pd
-import numpy as np
+import os
 from datetime import datetime
 
 
-MEMORY_FILE = "prediction_history.csv"
-
-COLUMNS = [
-    "ID",
-    "Ticker",
-    "Created_Time",
-    "Forecast_Horizon",
-    "Predicted_Price",
-    "Actual_Price",
-    "Residual",
-    "Residual_Percent",
-    "Absolute_Error_Percent",
-    "Confidence",
-    "Quantum_Score",
-    "Signal_Weights",
-    "Feature_Importance",
-    "Market_Regime",
-    "Volatility",
-    "Model_Version",
-    "Completed"
-]
+MEMORY_FILE = "prediction_memory.json"
 
 
-def initialize_memory():
+def _load():
     if not os.path.exists(MEMORY_FILE):
-        pd.DataFrame(columns=COLUMNS).to_csv(
-            MEMORY_FILE,
-            index=False
-        )
-
-
-def load_memory():
-    initialize_memory()
-
+        return []
     try:
-        data = pd.read_csv(MEMORY_FILE)
-
-        for col in COLUMNS:
-            if col not in data.columns:
-                data[col] = np.nan
-
-        return data[COLUMNS]
-
-    except Exception:
-        return pd.DataFrame(columns=COLUMNS)
+        with open(MEMORY_FILE, "r") as f:
+            return json.load(f)
+    except:
+        return []
 
 
-def save_memory(data):
+def _save(data):
     try:
-        data.to_csv(
-            MEMORY_FILE,
-            index=False
-        )
-        return True
-    except Exception:
-        return False
+        with open(MEMORY_FILE, "w") as f:
+            json.dump(data, f, indent=2)
+    except:
+        pass
 
 
-def save_prediction(
+# ============================================================
+# STORE FORECAST
+# ============================================================
+
+def store_prediction(
     ticker,
-    predicted_price,
-    horizon,
-    confidence,
-    regime,
-    volatility,
-    quantum_score=0,
-    signal_weights=None,
-    feature_importance=None,
-    model_version="v1"
+    days,
+    starting_price,
+    predicted_price
 ):
 
-    history = load_memory()
+    memory = _load()
 
     prediction = {
-        "ID": str(uuid.uuid4()),
-        "Ticker": ticker.upper(),
-        "Created_Time": datetime.now().strftime(
-            "%Y-%m-%d %H:%M:%S"
-        ),
-        "Forecast_Horizon": horizon,
-        "Predicted_Price": float(predicted_price),
-        "Actual_Price": np.nan,
-        "Residual": np.nan,
-        "Residual_Percent": np.nan,
-        "Absolute_Error_Percent": np.nan,
-        "Confidence": float(confidence),
-        "Quantum_Score": float(quantum_score),
-        "Signal_Weights": json.dumps(signal_weights or {}),
-        "Feature_Importance": json.dumps(feature_importance or {}),
-        "Market_Regime": regime,
-        "Volatility": float(volatility),
-        "Model_Version": model_version,
-        "Completed": False
+        "id": len(memory) + 1,
+        "ticker": ticker,
+        "days": days,
+        "date": datetime.now().isoformat(),
+        "starting_price": float(starting_price),
+        "predicted_price": float(predicted_price),
+        "actual_price": None,
+        "error_percent": None,
+        "completed": False
     }
 
-    history = pd.concat(
-        [
-            history,
-            pd.DataFrame([prediction])
-        ],
-        ignore_index=True
-    )
+    memory.append(prediction)
 
-    save_memory(history)
+    _save(memory)
 
-    return prediction["ID"]
+    return prediction["id"]
 
+
+# ============================================================
+# COMPLETE PREDICTION
+# ============================================================
 
 def complete_prediction(
     prediction_id,
     actual_price
 ):
 
-    history = load_memory()
+    memory = _load()
 
-    match = history.index[
-        history["ID"] == prediction_id
-    ]
+    for p in memory:
 
-    if len(match) == 0:
-        return False
+        if p["id"] == prediction_id:
 
-    i = match[0]
+            p["actual_price"] = float(actual_price)
 
-    predicted = float(
-        history.loc[i, "Predicted_Price"]
-    )
+            p["error_percent"] = abs(
+                actual_price - p["predicted_price"]
+            ) / p["predicted_price"] * 100
 
-    actual = float(actual_price)
+            p["completed"] = True
 
-    residual = actual - predicted
+            _save(memory)
 
-    error = (
-        residual / predicted * 100
-        if predicted
-        else 0
-    )
+            return True
 
-    history.loc[i, "Actual_Price"] = actual
-    history.loc[i, "Residual"] = residual
-    history.loc[i, "Residual_Percent"] = error
-    history.loc[i, "Absolute_Error_Percent"] = abs(error)
-    history.loc[i, "Completed"] = True
-
-    return save_memory(history)
+    return False
 
 
-def get_stock_history(ticker):
-    data = load_memory()
+# ============================================================
+# GET HISTORY
+# ============================================================
 
-    return data[
-        data["Ticker"] == ticker.upper()
-    ]
-
-
-def get_prediction_bias(ticker, horizon=None):
-
-    data = get_stock_history(ticker)
-
-    data = data[
-        data["Completed"] == True
-    ]
-
-    if horizon:
-        data = data[
-            data["Forecast_Horizon"] == horizon
-        ]
-
-    if data.empty:
-        return 0
-
-    return data.tail(50)["Residual"].mean()
-
-
-def get_model_accuracy(ticker, horizon=None):
-
-    data = get_stock_history(ticker)
-
-    data = data[
-        data["Completed"] == True
-    ]
-
-    if horizon:
-        data = data[
-            data["Forecast_Horizon"] == horizon
-        ]
-
-    if data.empty:
-        return {
-            "samples":0,
-            "accuracy":0,
-            "average_error":0
-        }
-
-    error = data["Absolute_Error_Percent"].mean()
-
-    return {
-        "samples":len(data),
-        "accuracy":max(0,100-error),
-        "average_error":error
-    }
-
-
-def get_recent_performance(ticker):
-
-    data = get_stock_history(ticker)
-
-    data = data[
-        data["Completed"] == True
-    ]
-
-    if data.empty:
-        return None
-
-    return {
-        "bias":data["Residual"].mean(),
-        "accuracy":max(
-            0,
-            100-data["Absolute_Error_Percent"].mean()
-        ),
-        "samples":len(data)
-    }
-
-
-def clean_memory(max_rows=10000):
-
-    data = load_memory()
-
-    if len(data) > max_rows:
-        data = data.tail(max_rows)
-        save_memory(data)
-
-    return True
-
-
-def clear_memory():
-
-    try:
-        if os.path.exists(MEMORY_FILE):
-            os.remove(MEMORY_FILE)
-
-        initialize_memory()
-
-        return True
-
-    except Exception:
-        return False
 def evaluate_predictions():
-    return load_memory()
 
+    return _load()
+
+
+# ============================================================
+# ADAPTIVE MODEL CORRECTION
+# ============================================================
 
 def get_prediction_adjustment():
 
-    data = load_memory()
+    history = _load()
 
-    completed = data[
-        data["Completed"] == True
-    ]
+    errors = []
 
-    if completed.empty:
+    for p in history:
+
+        if p.get("completed"):
+
+            errors.append(
+                p["actual_price"]
+                -
+                p["predicted_price"]
+            )
+
+    if not errors:
         return 0
 
-    return completed[
-        "Residual_Percent"
-    ].mean()
+    adjustment = sum(errors) / len(errors)
+
+    return round(adjustment, 4)
