@@ -201,7 +201,7 @@ adaptive_adjustment = get_prediction_adjustment(ticker)
 
 if forecast:
     forecast["adaptive_adjustment"] = adaptive_adjustment
-    forecast["adjusted_price"] = forecast["expected_price"] + adaptive_adjustment
+    forecast["adjusted_price"] = forecast["expected_price"] * (1 + adaptive_adjustment)
 
 with st.sidebar.expander("🧠 Model Learning Bias Feed"):
     st.write(f"Active Ticker: {ticker}")
@@ -297,18 +297,11 @@ if forecast is not None:
     st.caption("Feed realized results back into the adaptive memory matrix. The model calculates localized prediction biases and shifts future expectations.")
     pred_id = st.session_state.prediction_id
     if pred_id:
-        actual_price_input = st.number_input("Realized (Actual) Settlement Price ($)", min_value=0.0, value=0.0, step=0.1)
-        if st.button("Submit Price Target Settlement"):
-            if actual_price_input > 0.0:
-                complete_prediction(pred_id, actual_price_input)
-                st.success("Target finalized. Updating model learning matrix.")
-                time.sleep(0.5)
-                st.rerun()
-            else:
-                st.warning("Please supply a valid price target.")
+        complete_prediction(pred_id)
+        st.success("Automatic settlement check completed.")
     else:
-        st.info("Initiate a forecast to log and complete predictions.")
+        st.info("Initiate a forecast to log predictions.")
 
-    with st.expander("📄 Export Forecast"):
+     with st.expander("📄 Export Forecast"):
         report = create_forecast_report(forecast)
         st.download_button("Download Forecast CSV", report.to_csv(index=False), file_name=f"{ticker}_forecast.csv", mime="text/csv")
