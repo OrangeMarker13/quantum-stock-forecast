@@ -11,16 +11,33 @@ def calculate_market_state(close_series, external_features=None):
     current_price = close_series.iloc[-1]
     tech_signal = np.clip((current_price - sma_20) / (sma_20 + 1e-9) * 10, -1.0, 1.0)
     
-    weights = {"technical": 40.0, "macro": 20.0, "global": 10.0, "sector": 15.0, "sentiment": 15.0}
+    # Fractions are kept internally; presentation code can safely convert them
+    # to percentages once.  The previous 40.0-style values were reported as
+    # 4,000% weights in the forecast metadata.
+    weights = {"technical": 0.40, "macro": 0.20, "global": 0.10, "sector": 0.15, "sentiment": 0.15}
     market_state = tech_signal * 0.7
     if external_features:
         market_state += external_features.get("macro_score", 0.0) * 0.3
     return np.clip(market_state, -1.0, 1.0), weights, tech_signal
 
 def calculate_expected_return(returns_series, market_state, days):
-    mean_daily = returns_series.mean() if len(returns_series) > 0 else 0.0002
-    daily_vol = returns_series.std() if len(returns_series) > 0 else 0.01
-    return (mean_daily * days) + (market_state * daily_vol * np.sqrt(days))
+    """Estimate a log return over the requested horizon.
+
+    The factor frame contains simple returns, so converting to log returns
+    avoids the inconsistent mixture of arithmetic and exponential compounding
+    used by the original implementation.
+    """
+    values = np.asarray(returns_series, dtype=float)
+    values = values[np.isfinite(values) & (values > -1.0)]
+    if len(values) == 0:
+        mean_log_daily, daily_vol = 0.0002, 0.01
+    else:
+        log_returns = np.log1p(values)
+        mean_log_daily = float(np.mean(log_returns))
+        daily_vol = float(np.std(log_returns, ddof=1)) if len(log_returns) > 1 else 0.01
+        daily_vol = daily_vol if np.isfinite(daily_vol) and daily_vol > 0 else 0.01
+    horizon = max(1, int(days))
+    return (mean_log_daily * horizon) + (float(market_state) * daily_vol * np.sqrt(horizon))
 
 def calculate_confidence(price_marginal, bins_per_factor, annual_volatility, market_state):
     pm = np.array(price_marginal)
