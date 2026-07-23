@@ -36,15 +36,25 @@ def store_prediction(ticker, days, starting_price, predicted_price):
     _save(memory)
     return prediction["id"]
 
-def complete_prediction(prediction_id, actual_price):
+def complete_prediction(prediction_id):
     memory = _load()
+
     for p in memory:
-        if p["id"] == prediction_id:
-            p["actual_price"] = float(actual_price)
+        if p["id"] == prediction_id and not p["completed"]:
+            try:
+                import yfinance as yf
+                actual_price = float(
+                    yf.Ticker(p["ticker"]).history(period="1d")["Close"].iloc[-1]
+                )
+            except:
+                return False
+
+            p["actual_price"] = actual_price
             p["error_percent"] = abs(actual_price - p["predicted_price"]) / p["predicted_price"] * 100
             p["completed"] = True
             _save(memory)
             return True
+
     return False
 
 def evaluate_predictions():
