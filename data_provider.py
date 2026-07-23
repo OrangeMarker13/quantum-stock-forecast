@@ -15,6 +15,21 @@ MAX_RETRIES = 3
 os.makedirs(DATA_FOLDER, exist_ok=True)
 HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
 
+# A network search failure must not turn a recognizable company name (for
+# example, "Apple") into the invalid ticker "APPLE" in the UI.  Yahoo search
+# remains the primary source; this compact fallback covers the companies the
+# app already presents as known assets.
+LOCAL_COMPANY_SEARCH = {
+    "apple": ("AAPL", "Apple Inc."),
+    "microsoft": ("MSFT", "Microsoft Corporation"),
+    "nvidia": ("NVDA", "NVIDIA Corporation"),
+    "alphabet": ("GOOGL", "Alphabet Inc."),
+    "google": ("GOOGL", "Alphabet Inc."),
+    "amazon": ("AMZN", "Amazon.com Inc."),
+    "meta": ("META", "Meta Platforms Inc."),
+    "tesla": ("TSLA", "Tesla Inc."),
+}
+
 def yahoo_request(url):
     for attempt in range(MAX_RETRIES):
         try:
@@ -298,10 +313,19 @@ def get_company_info(ticker):
 def search_stocks(query):
     if not query: return []
     query = query.strip()
+    query_key = query.casefold()
+
+    def local_matches():
+        matches = []
+        for company_key, (symbol, name) in LOCAL_COMPANY_SEARCH.items():
+            if query_key in company_key or query_key in name.casefold() or query_key == symbol.casefold():
+                matches.append({"label": f"{name} ({symbol})", "symbol": symbol, "name": name, "priority": 100})
+        return matches
+
     url = f"https://query1.finance.yahoo.com/v1/finance/search?q={query}"
     try:
         data = yahoo_request(url)
-        if data is None: return []
+        if data is None: return local_matches()
         quotes, results = data.get("quotes", []), []
         for item in quotes:
             symbol = item.get("symbol")
@@ -315,10 +339,12 @@ def search_stocks(query):
             if symbol.upper() == query.upper(): priority += 20
             results.append({"label": f"{name} ({symbol})", "symbol": symbol, "name": name, "priority": priority})
         results.sort(key=lambda x: x["priority"], reverse=True)
-        return results[:15]
+        # Preserve useful local resolution if Yahoo's result set is empty or
+        # omits a well-known company-name query.
+        return (results or local_matches())[:15]
     except Exception as error:
         print("Search error:", error)
-        return []
+        return local_matches()
 
 def clear_data_cache():
     try:
