@@ -1,4 +1,7 @@
-
+# ============================================================
+# ANALYTICS.PY
+# Quantum Equity Research Terminal - Market Analytics Engine
+# ============================================================
 import numpy as np
 import pandas as pd
 
@@ -27,7 +30,6 @@ def add_features(data):
     
     df["Market_Strength"] = df["MA_30"] / (df["MA_90"] + 1e-9) * 50
     df["Market_Strength"] = np.clip(df["Market_Strength"], 0, 100)
-    
     return df.replace([np.inf, -np.inf], np.nan).fillna(0)
 
 def extract_inputs(data):
@@ -50,12 +52,10 @@ def validate_inputs(data, inputs):
     )
 
 def calculate_metrics(history):
-    if not history:
-        return {}
+    if not history: return {}
     df = pd.DataFrame(history)
     completed = df[df["actual_price"].notna()]
-    if completed.empty:
-        return {"predictions": 0}
+    if completed.empty: return {"predictions": 0}
     completed["error_percent"] = (abs(completed["actual_price"] - completed["predicted_price"]) / completed["predicted_price"] * 100)
     return {
         "predictions": len(completed),
@@ -64,8 +64,7 @@ def calculate_metrics(history):
     }
 
 def create_forecast_report(data):
-    if not data:
-        return pd.DataFrame()
+    if not data: return pd.DataFrame()
     report = {
         "Starting Price": data.get("starting_price", 0),
         "Expected Price": data.get("expected_price", 0),
