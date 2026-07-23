@@ -23,6 +23,11 @@ def build_factor_frame(market_data, spy_data=None, sector_data=None):
     df = market_data.copy()
     if "Date" not in df.columns:
         raise ValueError("market_data must have a 'Date' column to align macro factor data.")
+    df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+    df["Close"] = pd.to_numeric(df["Close"], errors="coerce")
+    df = df.dropna(subset=["Date", "Close"]).drop_duplicates("Date").sort_values("Date").reset_index(drop=True)
+    if len(df) < 30:
+        raise ValueError("market_data needs at least 30 valid dated closing prices.")
     close = df["Close"].astype(float)
     price_return = close.pct_change()
     volatility = price_return.rolling(30, min_periods=10).std()
@@ -44,18 +49,26 @@ def build_factor_frame(market_data, spy_data=None, sector_data=None):
     return frame, macro_ok
 
 def combine_macro_proxy(date_column, spy_data, sector_data):
-    target_dates = pd.to_datetime(pd.Series(date_column).reset_index(drop=True))
+    target_dates = pd.to_datetime(pd.Series(date_column).reset_index(drop=True), errors="coerce")
     spy_ret, sector_ret = None, None
+    def aligned_returns(data):
+        if data is None or data.empty or not {"Close", "Date"}.issubset(data.columns):
+            return None
+        series = data[["Date", "Close"]].copy()
+        series["Date"] = pd.to_datetime(series["Date"], errors="coerce")
+        series["Close"] = pd.to_numeric(series["Close"], errors="coerce")
+        series = series.dropna().drop_duplicates("Date").sort_values("Date")
+        if len(series) < 2:
+            return None
+        indexed = series.set_index("Date")["Close"].pct_change()
+        # Forward fill uses only information available on or before each asset
+        # date; nearest-neighbour alignment can leak future market returns.
+        return indexed.reindex(target_dates, method="ffill").reset_index(drop=True)
+
     if spy_data is not None and not spy_data.empty and "Close" in spy_data.columns and "Date" in spy_data.columns:
-        s = spy_data.copy()
-        s["Date"] = pd.to_datetime(s["Date"])
-        s = s.set_index("Date")["Close"].astype(float).pct_change().sort_index()
-        spy_ret = s.reindex(target_dates, method="nearest").reset_index(drop=True)
+        spy_ret = aligned_returns(spy_data)
     if sector_data is not None and not sector_data.empty and "Close" in sector_data.columns and "Date" in sector_data.columns:
-        s = sector_data.copy()
-        s["Date"] = pd.to_datetime(s["Date"])
-        s = s.set_index("Date")["Close"].astype(float).pct_change().sort_index()
-        sector_ret = s.reindex(target_dates, method="nearest").reset_index(drop=True)
+        sector_ret = aligned_returns(sector_data)
     if spy_ret is not None and sector_ret is not None:
         combined = pd.concat([spy_ret, sector_ret], axis=1)
         combined.columns = ["spy", "sector"]
@@ -95,28 +108,29 @@ def choose_resolution(n_rows, macro_ok, shots):
     total_qubits = qubits_per_factor * len(active_factors)
     return active_factors, qubits_per_factor, total_qubits, ("upgraded" if qubits_per_factor == UPGRADED_QUBITS_PER_FACTOR else "default")
 
-def classical_joint_sampling(pmf, total_qubits, shots):
+def classical_joint_sampling(pmf, total_qubits, shots, seed=None):
     dim = len(pmf)
-    sampled = np.random.choice(np.arange(dim), size=shots, p=pmf)
+    sampled = np.random.default_rng(seed).choice(np.arange(dim), size=shots, p=pmf)
     counts = {}
     for idx in sampled:
         bitstr = format(idx, f"0{total_qubits}b")
         counts[bitstr] = counts.get(bitstr, 0) + 1
     return counts
 
-def run_joint_circuit(pmf, total_qubits, shots):
-    if not QISKIT_AVAILABLE: return classical_joint_sampling(pmf, total_qubits, shots)
+def run_joint_circuit(pmf, total_qubits, shots, seed=None):
+    if not QISKIT_AVAILABLE:
+        return classical_joint_sampling(pmf, total_qubits, shots, seed), True
     try:
         amplitudes = np.sqrt(pmf)
         amplitudes = amplitudes / np.linalg.norm(amplitudes)
         circuit = QuantumCircuit(total_qubits)
         circuit.initialize(amplitudes, range(total_qubits))
         circuit.measure_all()
-        simulator = AerSimulator()
-        return simulator.run(circuit, shots=shots).result().get_counts()
+        simulator = AerSimulator(seed_simulator=seed)
+        return simulator.run(circuit, shots=shots).result().get_counts(), False
     except Exception as e:
         print("Fallback triggered. Circuit error:", e)
-        return classical_joint_sampling(pmf, total_qubits, shots)
+        return classical_joint_sampling(pmf, total_qubits, shots, seed), True
 
 def counts_to_joint_pmf(counts, total_qubits, shots):
     dim = 2 ** total_qubits
@@ -137,17 +151,23 @@ def conditional_distribution(joint_nd, factor_index, target_factor_index, bin_se
     slicer = [slice(None)] * joint_nd.ndim
     slicer[factor_index] = bin_selector
     sliced = joint_nd[tuple(slicer)]
-    sum_axes = tuple(i for i in range(sliced.ndim) if i != target_factor_index)
+    # Slicing a preceding factor removes one axis, so the target axis shifts.
+    reduced_target_index = target_factor_index - int(factor_index < target_factor_index)
+    sum_axes = tuple(i for i in range(sliced.ndim) if i != reduced_target_index)
     target_marginal = sliced.sum(axis=sum_axes)
     total_mass = target_marginal.sum()
     return None if total_mass <= 1e-12 else target_marginal / total_mass
 
 def price_bin_edges_to_dollar_grid(price_return_edges, starting_price, bins_per_factor, days, expected_return, daily_volatility):
     mids = (price_return_edges[:-1] + price_return_edges[1:]) / 2.0
-    daily_std = float(np.std(mids)) if float(np.std(mids)) > 1e-12 else 1e-6
-    standardized = mids / daily_std
-    horizon_movement = np.clip((daily_volatility * np.sqrt(252)) * np.sqrt(max(days, 1) / 252), 0.03, 0.40)
-    return starting_price * (1 + (expected_return + standardized * horizon_movement)), (expected_return + standardized * horizon_movement)
+    daily_std = float(np.std(mids))
+    standardized = (mids - float(np.mean(mids))) / daily_std if daily_std > 1e-12 else np.zeros_like(mids)
+    # A one-day 3% minimum distorted the distribution for low-volatility
+    # equities.  Use the observed horizon volatility instead, with only a
+    # numerical floor to preserve a valid grid for near-constant series.
+    horizon_movement = max(float(daily_volatility) * np.sqrt(max(int(days), 1)), 1e-6)
+    return_grid = expected_return + standardized * horizon_movement
+    return float(starting_price) * np.exp(return_grid), return_grid
 
 def calculate_entanglement_entropy(pmf, qubits_per_factor, n_factors):
     amplitudes = np.sqrt(pmf)
@@ -162,7 +182,7 @@ def calculate_entanglement_entropy(pmf, qubits_per_factor, n_factors):
     except: entropy, norm_ent = 0.0, 0.0
     return float(entropy), float(norm_ent)
 
-def quantum_joint_forecast(market_data, starting_price, days=30, shots=1500, spy_data=None, sector_data=None, external_features=None):
+def quantum_joint_forecast(market_data, starting_price, days=30, shots=1500, spy_data=None, sector_data=None, external_features=None, seed=None):
     import quantum_engine as qe
     frame, macro_ok = build_factor_frame(market_data, spy_data, sector_data)
     if len(frame) < 30:
@@ -172,8 +192,11 @@ def quantum_joint_forecast(market_data, starting_price, days=30, shots=1500, spy
     bins_per_factor = 2 ** qubits_per_factor
     pmf, bin_edges, bin_indices = build_joint_distribution(frame, active_factors, bins_per_factor)
     
-    fallback_used = not QISKIT_AVAILABLE
-    counts = run_joint_circuit(pmf, total_qubits, shots)
+    if not np.isfinite(float(starting_price)) or float(starting_price) <= 0:
+        raise ValueError("starting_price must be a finite positive number.")
+    if int(days) < 1 or int(shots) < 1:
+        raise ValueError("days and shots must be positive integers.")
+    counts, fallback_used = run_joint_circuit(pmf, total_qubits, int(shots), seed)
     joint_pmf = counts_to_joint_pmf(counts, total_qubits, shots)
     joint_nd = reshape_joint(joint_pmf, len(active_factors), bins_per_factor)
     
@@ -185,7 +208,8 @@ def quantum_joint_forecast(market_data, starting_price, days=30, shots=1500, spy
     expected_return = qe.calculate_expected_return(returns_series, market_state, days)
     classical_expected_price = starting_price * np.exp(expected_return)
     
-    daily_volatility = float(returns_series.std()) if float(returns_series.std()) > 0 else 0.01
+    daily_volatility = float(returns_series.std(ddof=1)) if len(returns_series) > 1 else 0.01
+    daily_volatility = daily_volatility if np.isfinite(daily_volatility) and daily_volatility > 0 else 0.01
     annual_volatility = daily_volatility * np.sqrt(252)
     
     price_grid, return_grid = price_bin_edges_to_dollar_grid(bin_edges["price_return"], starting_price, bins_per_factor, days, expected_return, daily_volatility)
