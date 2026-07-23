@@ -214,7 +214,7 @@ def quantum_joint_forecast(market_data, starting_price, days=30, shots=1500, spy
     entropy, normalized_entanglement = calculate_entanglement_entropy(joint_pmf, qubits_per_factor, len(active_factors))
     metadata = {
         "weights": {k: round(v * 100, 2) for k, v in weights.items()},
-        "technical_signal": round(float(technical_signal), 4),
+        "technical_signal": round(float(tech_signal), 4),
         "market_state": round(float(market_state), 4),
         "active_factors": active_factors,
         "qubits_per_factor": qubits_per_factor,
