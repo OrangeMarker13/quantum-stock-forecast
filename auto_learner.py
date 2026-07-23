@@ -1,29 +1,16 @@
-# ============================================================
-# AUTO_LEARNER.PY
-# Autonomous Prediction Settlement Worker
-# ============================================================
+"""Scheduled worker that settles only forecasts whose horizons have elapsed."""
 
-from prediction_memory import complete_prediction, evaluate_predictions
+from prediction_memory import settle_due_predictions
 
 
-def run_learning_cycle():
-
-    predictions = evaluate_predictions()
-
-    updated = 0
-
-    for prediction in predictions:
-
-        if not prediction.get("completed"):
-
-            success = complete_prediction(
-                prediction["id"]
-            )
-
-            if success:
-                updated += 1
-
-    print(f"Learning cycle complete. Updated {updated} predictions.")
+def run_learning_cycle() -> dict[str, int]:
+    result = settle_due_predictions()
+    print(
+        "Learning cycle complete. "
+        f"Checked {result['checked']}; settled {result['settled']}; "
+        f"pending {result['pending']}; unavailable {result['unavailable']}."
+    )
+    return result
 
 
 if __name__ == "__main__":
