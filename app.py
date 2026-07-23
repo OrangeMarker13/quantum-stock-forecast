@@ -165,7 +165,7 @@ market_data = market_data.replace([np.inf, -np.inf], np.nan).dropna(subset=["Clo
 with st.expander("📈 Historical Price Action Feed"):
     recent = market_data.tail(50).copy()
     recent["Return %"] = recent["Close"].pct_change() * 100
-    st.dataframe(recent, use_container_width=True)
+    st.dataframe(recent, width="stretch")
 
 market_data_features = add_features(market_data)
 quantum_inputs = extract_inputs(market_data_features)
@@ -175,7 +175,7 @@ if not validate_inputs(market_data_features, quantum_inputs):
     st.stop()
 
 with st.expander("⚛️ Input State Representation Vector"):
-    st.dataframe(pd.DataFrame({"Feature": list(quantum_inputs.keys()), "Value": list(quantum_inputs.values())}), use_container_width=True)
+    st.dataframe(pd.DataFrame({"Feature": list(quantum_inputs.keys()), "Value": list(quantum_inputs.values())}), width="stretch")
 
 # Run Button trigger
 if run_button:
@@ -259,7 +259,7 @@ if forecast is not None:
                 "P(Drop > 5%) | Extreme Low": f"{vals['p_drop_given_low']*100:.1f}%" if vals.get('p_drop_given_low') is not None else "N/A",
                 "Unconditional P(Drop > 5%)": f"{vals['p_drop_unconditional']*100:.1f}%"
             })
-        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
     else:
         st.info("Conditional metrics unavailable for 3-factor mode.")
         
