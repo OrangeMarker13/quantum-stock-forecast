@@ -302,6 +302,6 @@ if forecast is not None:
     else:
         st.info("Initiate a forecast to log predictions.")
 
- with st.expander("📄 Export Forecast"):
+    with st.expander("📄 Export Forecast"):
         report = create_forecast_report(forecast)
         st.download_button("Download Forecast CSV", report.to_csv(index=False), file_name=f"{ticker}_forecast.csv", mime="text/csv")
