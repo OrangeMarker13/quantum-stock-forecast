@@ -6,7 +6,7 @@ import numpy as np
 
 def calculate_market_state(close_series, external_features=None):
     if len(close_series) < 20:
-        return 0.0, {"technical": 100.0, "macro": 0.0, "global": 0.0, "sector": 0.0, "sentiment": 0.0}, 0.0
+        return 0.0, {"technical": 1.0, "macro": 0.0, "global": 0.0, "sector": 0.0, "sentiment": 0.0}, 0.0
     sma_20 = close_series.rolling(20).mean().iloc[-1]
     current_price = close_series.iloc[-1]
     tech_signal = np.clip((current_price - sma_20) / (sma_20 + 1e-9) * 10, -1.0, 1.0)
