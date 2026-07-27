@@ -1,8 +1,11 @@
-name: Daily Prediction Learning
+name: Autonomous Market Forecasting
 
 on:
   schedule:
-    - cron: "30 21 * * 1-5"
+    # Both UTC offsets cover Eastern daylight-saving changes. The worker only
+    # acts inside the applicable America/New_York market window.
+    - cron: "45 13,14 * * 1-5"
+    - cron: "10 20,21 * * 1-5"
   workflow_dispatch:
 
 permissions:
@@ -23,13 +26,14 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install dependencies
+      - name: Install worker dependencies
         run: |
-          pip install numpy
+          pip install numpy pandas
 
-      - name: Run autonomous learner
+      - name: Run market-session worker
         run: |
-          python auto_learner.py
+          python autonomous_forecaster.py --mode open
+          python autonomous_forecaster.py --mode close
 
       - name: Commit memory update
         run: |
