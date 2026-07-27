@@ -17,6 +17,7 @@ from typing import Any, Callable
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode
 from urllib.request import Request, urlopen
+from zoneinfo import ZoneInfo
 
 import numpy as np
 
@@ -25,6 +26,7 @@ MEMORY_FILE = Path(__file__).with_name("prediction_memory.json")
 YAHOO_CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart/{ticker}"
 REQUEST_TIMEOUT = 15
 MIN_LOCAL_SAMPLES = 3
+MARKET_TIMEZONE = ZoneInfo("America/New_York")
 
 
 def _utc_now() -> datetime:
@@ -111,6 +113,8 @@ def store_prediction(
     starting_price: float,
     predicted_price: float,
     created_at: datetime | None = None,
+    target_date: date | str | None = None,
+    prediction_type: str = "horizon",
 ) -> int:
     """Store one forecast with an explicit settlement date.
 
@@ -132,6 +136,19 @@ def store_prediction(
     if created.tzinfo is None:
         created = created.replace(tzinfo=timezone.utc)
     created = created.astimezone(timezone.utc)
+    if isinstance(target_date, str):
+        settlement_date = _parse_record_date(target_date)
+    elif isinstance(target_date, date):
+        settlement_date = target_date
+    elif target_date is None:
+        # Forecast horizons in this project refer to U.S. trading sessions,
+        # not a UTC calendar day (which can already be tomorrow after close).
+        settlement_date = _business_day_after(created.astimezone(MARKET_TIMEZONE).date(), horizon)
+    else:
+        raise ValueError("target_date must be a date or ISO date string")
+    if settlement_date is None or settlement_date < created.date():
+        raise ValueError("target_date cannot be before the prediction date")
+    prediction_type = str(prediction_type).strip().lower() or "horizon"
     memory = _load()
     prediction = {
         "id": _next_id(memory),
@@ -140,7 +157,8 @@ def store_prediction(
         "created_at": created.isoformat(),
         # Retained for compatibility with existing memory files and reports.
         "date": created.isoformat(),
-        "target_date": _business_day_after(created.date(), horizon).isoformat(),
+        "target_date": settlement_date.isoformat(),
+        "prediction_type": prediction_type,
         "starting_price": initial,
         "predicted_price": forecast,
         "actual_price": None,
@@ -152,6 +170,42 @@ def store_prediction(
     memory.append(prediction)
     _save(memory)
     return prediction["id"]
+
+
+def prediction_exists(ticker: str, days: int, target_date: date | str, prediction_type: str = "horizon") -> bool:
+    """Return whether a forecast already covers this ticker, horizon, and target."""
+    target = target_date.isoformat() if isinstance(target_date, date) else str(target_date)
+    ticker = str(ticker).upper().strip()
+    kind = str(prediction_type).strip().lower() or "horizon"
+    return any(
+        record.get("ticker") == ticker
+        and record.get("days") == int(days)
+        and record.get("target_date") == target
+        and record.get("prediction_type", "horizon") == kind
+        for record in _load()
+    )
+
+
+def apply_learning_adjustment(forecast: dict[str, Any], adjustment: float) -> dict[str, Any]:
+    """Apply a bounded learned bias to all displayed price outcomes.
+
+    The probability shape remains empirical; its price labels move together so
+    the displayed range and expected price remain internally consistent.
+    """
+    adjusted = dict(forecast)
+    correction = float(np.clip(adjustment, -0.05, 0.05))
+    multiplier = 1.0 + correction
+    adjusted["raw_expected_price"] = float(forecast["expected_price"])
+    adjusted["expected_price"] = adjusted["raw_expected_price"] * multiplier
+    adjusted["price_grid"] = np.asarray(forecast["price_grid"], dtype=float) * multiplier
+    adjusted["return_grid"] = np.log(adjusted["price_grid"] / float(forecast["starting_price"]))
+    probabilities = np.asarray(forecast["probability"], dtype=float)
+    returns = adjusted["return_grid"]
+    adjusted["upside_probability"] = float(np.clip(probabilities[returns > 0.05].sum() * 100, 0, 100))
+    adjusted["downside_probability"] = float(np.clip(probabilities[returns < -0.05].sum() * 100, 0, 100))
+    adjusted["neutral_probability"] = float(np.clip(100 - adjusted["upside_probability"] - adjusted["downside_probability"], 0, 100))
+    adjusted["adaptive_adjustment"] = correction
+    return adjusted
 
 
 def _fetch_close_on_or_after(ticker: str, target: date) -> tuple[float, date] | None:
