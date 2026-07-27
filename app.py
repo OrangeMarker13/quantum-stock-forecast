@@ -45,20 +45,123 @@ def apply_app_style() -> None:
     st.markdown(
         """
         <style>
-        .stApp { background: #f7f9fc; color: #172033; }
-        section[data-testid="stSidebar"] { background: #ffffff; border-right: 1px solid #e5eaf2; }
-        h1, h2, h3 { color: #14213d !important; letter-spacing: -0.02em; }
-        .stButton > button { background: #1d4ed8; color: #ffffff; border: 0; border-radius: 9px;
-                              font-weight: 650; padding: .55rem 1rem; width: 100%; }
-        .stButton > button:hover { background: #1e40af; color: #ffffff; }
-        .metric-card { background: #ffffff; border: 1px solid #e4e9f2; border-radius: 12px;
-                       padding: 16px 18px; min-height: 112px; box-shadow: 0 2px 8px rgba(15, 23, 42, .04); }
-        .metric-label { color: #667085; font-size: .82rem; font-weight: 650; margin-bottom: 7px; }
-        .metric-value { color: #14213d; font-size: 1.55rem; font-weight: 750; line-height: 1.2; }
-        .metric-detail { color: #667085; font-size: .82rem; margin-top: 6px; }
-        .positive { color: #087443; } .negative { color: #b42318; } .neutral { color: #475467; }
-        .outlook { display: inline-block; padding: 6px 11px; border-radius: 999px; font-weight: 650;
-                   font-size: .87rem; background: #eef4ff; color: #1d4ed8; }
+        .stApp {
+            background: #f7f9fc;
+            color: #172033;
+        }
+
+        section[data-testid="stSidebar"] {
+            background: #ffffff;
+            border-right: 1px solid #e5eaf2;
+        }
+
+        h1, h2, h3 {
+            color: #14213d !important;
+            letter-spacing: -0.02em;
+        }
+
+        label, p, span, div {
+            color: #172033;
+        }
+
+        div[data-baseweb="input"] {
+            background: #ffffff;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+        }
+
+        div[data-baseweb="input"] input {
+            color: #14213d !important;
+            background: #ffffff !important;
+        }
+
+        div[data-baseweb="input"] input::placeholder {
+            color: #64748b !important;
+        }
+
+        div[data-baseweb="select"] > div {
+            background: #ffffff;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+        }
+
+        div[data-baseweb="select"] span {
+            color: #14213d !important;
+        }
+
+        ul[role="listbox"] {
+            background: #ffffff;
+        }
+
+        ul[role="listbox"] li {
+            color: #14213d !important;
+        }
+
+        .stButton > button {
+            background: #1d4ed8;
+            color: #ffffff !important;
+            border: 0;
+            border-radius: 9px;
+            font-weight: 650;
+            padding: .55rem 1rem;
+            width: 100%;
+        }
+
+        .stButton > button:hover {
+            background: #1e40af;
+            color: #ffffff !important;
+        }
+
+        .metric-card {
+            background: #ffffff;
+            border: 1px solid #e4e9f2;
+            border-radius: 12px;
+            padding: 16px 18px;
+            min-height: 112px;
+            box-shadow: 0 2px 8px rgba(15, 23, 42, .04);
+        }
+
+        .metric-label {
+            color: #667085;
+            font-size: .82rem;
+            font-weight: 650;
+            margin-bottom: 7px;
+        }
+
+        .metric-value {
+            color: #14213d;
+            font-size: 1.55rem;
+            font-weight: 750;
+            line-height: 1.2;
+        }
+
+        .metric-detail {
+            color: #667085;
+            font-size: .82rem;
+            margin-top: 6px;
+        }
+
+        .positive {
+            color: #087443;
+        }
+
+        .negative {
+            color: #b42318;
+        }
+
+        .neutral {
+            color: #475467;
+        }
+
+        .outlook {
+            display: inline-block;
+            padding: 6px 11px;
+            border-radius: 999px;
+            font-weight: 650;
+            font-size: .87rem;
+            background: #eef4ff;
+            color: #1d4ed8;
+        }
         </style>
         """,
         unsafe_allow_html=True,
@@ -112,7 +215,6 @@ def forecast_chart(forecast: dict) -> None:
 
 
 apply_app_style()
-
 with st.sidebar:
     st.header("Find a stock")
     search_query = st.text_input("Company or ticker", value="Microsoft", placeholder="e.g., Apple or AAPL")
@@ -121,19 +223,31 @@ with st.sidebar:
     except Exception:
         search_results = []
     if search_results:
-        selected = st.selectbox("Select a result", search_results, format_func=lambda item: item.get("label", item.get("symbol", "Unknown")))
+        selected = st.selectbox(
+            "Select a result",
+            search_results,
+            format_func=lambda item: item.get("label", item.get("symbol", "Unknown"))
+        )
         ticker = selected.get("symbol", search_query).upper()
         company_name = selected.get("name", ticker)
     else:
         ticker = search_query.upper().strip()
         company_name = ticker
 
-    forecast_days = st.selectbox("Forecast period", list(HORIZON_LABELS), index=3, format_func=HORIZON_LABELS.get)
+    forecast_days = st.selectbox(
+        "Forecast period",
+        list(HORIZON_LABELS),
+        index=3,
+        format_func=HORIZON_LABELS.get
+    )
     run_button = st.button("Create forecast", type="primary")
+
     if st.button("Clear saved view"):
         reset_app()
         st.rerun()
+
     st.caption("Forecasts are estimates, not investment advice.")
+
 
 live_data = get_live_price(ticker) or {}
 company = get_company_info(ticker) or {"name": company_name}
@@ -144,13 +258,30 @@ st.title(company.get("name", company_name))
 st.caption(f"{ticker} · Prices may be delayed · Updated {datetime.now().strftime('%I:%M %p')}")
 
 summary_columns = st.columns(3)
+
 with summary_columns[0]:
-    metric_card("Current price", format_price(current_price) if current_price else "Unavailable", "Latest available quote")
+    metric_card(
+        "Current price",
+        format_price(current_price) if current_price else "Unavailable",
+        "Latest available quote"
+    )
+
 with summary_columns[1]:
     change_tone = "positive" if daily_change > 0 else "negative" if daily_change < 0 else "neutral"
-    metric_card("Today", percent_text(daily_change) if live_data else "Unavailable", "Change from prior close", change_tone)
+    metric_card(
+        "Today",
+        percent_text(daily_change) if live_data else "Unavailable",
+        "Change from prior close",
+        change_tone
+    )
+
 with summary_columns[2]:
-    metric_card("Forecast period", HORIZON_LABELS[forecast_days], "Choose a period in the sidebar")
+    metric_card(
+        "Forecast period",
+        HORIZON_LABELS[forecast_days],
+        "Choose a period in the sidebar"
+    )
+
 
 market_data = get_stock_data(ticker)
 spy_data = get_stock_data("SPY")
@@ -164,74 +295,165 @@ if market_data.empty or not validate_market_data(market_data):
 market_data = market_data.copy()
 market_data["Close"] = pd.to_numeric(market_data["Close"], errors="coerce")
 market_data = market_data.replace([np.inf, -np.inf], np.nan).dropna(subset=["Close"])
+
 features = add_features(market_data)
+
 if not validate_inputs(features, extract_inputs(features)):
     st.error("The available history is incomplete. Please try another stock.")
     st.stop()
 
+
 if run_button:
     base_price = current_price or safe_float(market_data["Close"].iloc[-1])
+
     try:
         with st.spinner("Reviewing price history and market context…"):
             raw_forecast = quantum_joint_forecast(
-                market_data, base_price, days=forecast_days, shots=1500,
-                spy_data=spy_data, sector_data=sector_data,
+                market_data,
+                base_price,
+                days=forecast_days,
+                shots=1500,
+                spy_data=spy_data,
+                sector_data=sector_data,
             )
+
         learned_bias = get_prediction_adjustment(ticker, forecast_days)
         forecast = apply_learning_adjustment(raw_forecast, learned_bias)
-        prediction_id = store_prediction(ticker, forecast_days, base_price, forecast["expected_price"])
+
+        prediction_id = store_prediction(
+            ticker,
+            forecast_days,
+            base_price,
+            forecast["expected_price"]
+        )
+
         st.session_state.forecast = forecast
         st.session_state.forecast_settings = (ticker, forecast_days)
         st.session_state.prediction_id = prediction_id
+
         st.success("Forecast ready.")
+
     except Exception:
         st.error("We could not complete this forecast. Please try again in a moment.")
 
+
 forecast = st.session_state.forecast
 settings = st.session_state.forecast_settings
+
 if forecast is not None and settings and settings[0] != ticker:
     forecast = None
+
 
 if forecast is None:
     st.info("Choose a stock and forecast period, then select **Create forecast**.")
     st.stop()
 
+
 expected_move = (forecast["expected_price"] / forecast["starting_price"] - 1) * 100
 risk = forecast["risk_score"]
+
 risk_label = "Lower" if risk < 3.5 else "Moderate" if risk < 6.5 else "Higher"
 outlook = forecast.get("market_regime", "Neutral")
 
+
 st.divider()
 st.subheader("Your forecast")
+
 forecast_columns = st.columns(4)
+
 with forecast_columns[0]:
-    metric_card("Expected price", format_price(forecast["expected_price"]), f"Over {HORIZON_LABELS[settings[1]].lower()}")
+    metric_card(
+        "Expected price",
+        format_price(forecast["expected_price"]),
+        f"Over {HORIZON_LABELS[settings[1]].lower()}"
+    )
+
 with forecast_columns[1]:
     movement_tone = "positive" if expected_move > 0 else "negative" if expected_move < 0 else "neutral"
-    metric_card("Expected move", percent_text(expected_move), "From the current price", movement_tone)
-with forecast_columns[2]:
-    metric_card("Forecast confidence", f"{forecast['confidence_score']:.0f}/100", "Higher means a more concentrated estimate")
-with forecast_columns[3]:
-    metric_card("Market risk", risk_label, "Based on recent price swings")
 
-st.markdown(f'<span class="outlook">Market outlook: {html.escape(outlook)}</span>', unsafe_allow_html=True)
+    metric_card(
+        "Expected move",
+        percent_text(expected_move),
+        "From the current price",
+        movement_tone
+    )
+
+with forecast_columns[2]:
+    metric_card(
+        "Forecast confidence",
+        f"{forecast['confidence_score']:.0f}/100",
+        "Higher means a more concentrated estimate"
+    )
+
+with forecast_columns[3]:
+    metric_card(
+        "Market risk",
+        risk_label,
+        "Based on recent price swings"
+    )
+
+
+st.markdown(
+    f'<span class="outlook">Market outlook: {html.escape(outlook)}</span>',
+    unsafe_allow_html=True
+)
+
 st.subheader("Possible price range")
-st.caption("This shows the range of outcomes the model considers more or less likely. It is not a guarantee.")
+st.caption(
+    "This shows the range of outcomes the model considers more or less likely. It is not a guarantee."
+)
+
 forecast_chart(forecast)
 
+
 probability_columns = st.columns(3)
+
 with probability_columns[0]:
-    metric_card("Chance of a gain above 5%", f"{forecast['upside_probability']:.0f}%", "Within the forecast period")
+    metric_card(
+        "Chance of a gain above 5%",
+        f"{forecast['upside_probability']:.0f}%",
+        "Within the forecast period"
+    )
+
 with probability_columns[1]:
-    metric_card("Chance of a loss above 5%", f"{forecast['downside_probability']:.0f}%", "Within the forecast period")
+    metric_card(
+        "Chance of a loss above 5%",
+        f"{forecast['downside_probability']:.0f}%",
+        "Within the forecast period"
+    )
+
 with probability_columns[2]:
-    metric_card("Most likely range", f"{forecast['neutral_probability']:.0f}%", "Moves between −5% and +5%")
+    metric_card(
+        "Most likely range",
+        f"{forecast['neutral_probability']:.0f}%",
+        "Moves between −5% and +5%"
+    )
+
 
 if abs(forecast.get("adaptive_adjustment", 0.0)) >= 0.001:
-    st.caption("This forecast incorporates the model’s results from comparable, previously settled forecasts.")
+    st.caption(
+        "This forecast incorporates the model’s results from comparable, previously settled forecasts."
+    )
+
 
 with st.expander("Forecast details"):
-    st.write(f"Uses {len(market_data)} recent market sessions plus broad-market and sector context when available.")
-    st.dataframe(market_data[["Date", "Close"]].tail(30).rename(columns={"Close": "Closing price"}), use_container_width=True, hide_index=True)
+    st.write(
+        f"Uses {len(market_data)} recent market sessions plus broad-market and sector context when available."
+    )
+
+    st.dataframe(
+        market_data[["Date", "Close"]]
+        .tail(30)
+        .rename(columns={"Close": "Closing price"}),
+        use_container_width=True,
+        hide_index=True
+    )
+
     report = create_forecast_report(forecast)
-    st.download_button("Download forecast summary (CSV)", report.to_csv(index=False), file_name=f"{ticker}_forecast.csv", mime="text/csv")
+
+    st.download_button(
+        "Download forecast summary (CSV)",
+        report.to_csv(index=False),
+        file_name=f"{ticker}_forecast.csv",
+        mime="text/csv"
+    )
