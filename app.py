@@ -1,307 +1,237 @@
-# ============================================================
-# APP.PY
-# Quantum Equity Research Terminal - Main Application Interface
-# ============================================================
-import streamlit as st
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-import gc
-import time
+"""Simple, investor-facing Streamlit interface for the forecast service."""
+
+from __future__ import annotations
+
+import html
 from datetime import datetime
 
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import streamlit as st
+
+from analytics import add_features, create_forecast_report, extract_inputs, validate_inputs
 from data_provider import (
-    get_stock_data, get_live_price, get_company_info, search_stocks,
-    format_price, validate_market_data, clear_data_cache
+    clear_data_cache,
+    format_price,
+    get_company_info,
+    get_live_price,
+    get_stock_data,
+    search_stocks,
+    validate_market_data,
 )
-from prediction_memory import (
-    store_prediction, evaluate_predictions, get_prediction_adjustment, complete_prediction
-)
+from prediction_memory import apply_learning_adjustment, get_prediction_adjustment, store_prediction
 from quantum_joint_engine import quantum_joint_forecast
 from sector_lookup import get_sector_etf
-from analytics import add_features, extract_inputs, validate_inputs, create_forecast_report
 
-# Streamlit Config
-st.set_page_config(
-    page_title="Quantum Equity Research Terminal",
-    page_icon="⚛️",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+
+st.set_page_config(page_title="Market Outlook", page_icon="📈", layout="wide", initial_sidebar_state="expanded")
 st.set_option("client.showErrorDetails", False)
 
-# Initialize Session State
-DEFAULT_STATE = {
-    "forecast": None,
-    "forecast_settings": None,
-    "last_run": "Never",
-    "last_price": None,
-    "prediction_id": None
+HORIZON_LABELS = {
+    1: "Next trading day",
+    2: "2 trading days",
+    7: "1 week (7 trading days)",
+    30: "1 month (30 trading days)",
+    60: "3 months (60 trading days)",
+    90: "About 4 months (90 trading days)",
 }
-for key, value in DEFAULT_STATE.items():
-    if key not in st.session_state:
-        st.session_state[key] = value
+DEFAULT_STATE = {"forecast": None, "forecast_settings": None, "prediction_id": None}
+for state_key, default_value in DEFAULT_STATE.items():
+    st.session_state.setdefault(state_key, default_value)
 
-def apply_quantum_ui():
-    st.markdown("""
+
+def apply_app_style() -> None:
+    st.markdown(
+        """
         <style>
-        .stApp {
-            background: radial-gradient(circle at 10% 10%, rgba(34,211,238,.15), transparent 45%),
-                        radial-gradient(circle at 90% 90%, rgba(139,92,246,.15), transparent 45%),
-                        linear-gradient(135deg, #020617, #0f172a);
-        }
-        h1 { color: #22d3ee !important; font-weight: 900; }
-        h2, h3, h4 { color: #e0f2fe !important; font-weight: 700; }
-        p { color: #cbd5e1; }
-        section[data-testid="stSidebar"] { background: #020617; }
-        .stButton button {
-            background: linear-gradient(90deg, #06b6d4, #8b5cf6);
-            color: white; border-radius: 12px; font-weight: 800; border: none;
-        }
-        .metric-box {
-            background: rgba(15, 23, 42, 0.75);
-            border: 1px solid rgba(34, 211, 238, 0.2);
-            border-radius: 14px; padding: 14px; text-align: center;
-        }
-        .positive { color: #34d399; font-weight: 800; }
-        .negative { color: #f87171; font-weight: 800; }
-        .neutral { color: #22d3ee; font-weight: 800; }
+        .stApp { background: #f7f9fc; color: #172033; }
+        section[data-testid="stSidebar"] { background: #ffffff; border-right: 1px solid #e5eaf2; }
+        h1, h2, h3 { color: #14213d !important; letter-spacing: -0.02em; }
+        .stButton > button { background: #1d4ed8; color: #ffffff; border: 0; border-radius: 9px;
+                              font-weight: 650; padding: .55rem 1rem; width: 100%; }
+        .stButton > button:hover { background: #1e40af; color: #ffffff; }
+        .metric-card { background: #ffffff; border: 1px solid #e4e9f2; border-radius: 12px;
+                       padding: 16px 18px; min-height: 112px; box-shadow: 0 2px 8px rgba(15, 23, 42, .04); }
+        .metric-label { color: #667085; font-size: .82rem; font-weight: 650; margin-bottom: 7px; }
+        .metric-value { color: #14213d; font-size: 1.55rem; font-weight: 750; line-height: 1.2; }
+        .metric-detail { color: #667085; font-size: .82rem; margin-top: 6px; }
+        .positive { color: #087443; } .negative { color: #b42318; } .neutral { color: #475467; }
+        .outlook { display: inline-block; padding: 6px 11px; border-radius: 999px; font-weight: 650;
+                   font-size: .87rem; background: #eef4ff; color: #1d4ed8; }
         </style>
-    """, unsafe_allow_html=True)
+        """,
+        unsafe_allow_html=True,
+    )
 
-apply_quantum_ui()
 
-def safe_float(value, default=0.0):
-    try: return float(value)
-    except: return default
-
-def format_percent(value):
+def safe_float(value: object, default: float = 0.0) -> float:
     try:
-        val = float(value)
-        arrow = "▲" if val >= 0 else "▼"
-        return f"{arrow} {val:+.2f}%"
-    except: return "N/A"
+        value = float(value)
+        return value if np.isfinite(value) else default
+    except (TypeError, ValueError):
+        return default
 
-def metric_card(title, value, change=None):
-    extra = f'<div class="{"positive" if change >= 0 else "negative"}">{format_percent(change)}</div>' if change is not None else ""
-    st.markdown(f"""
-        <div class="metric-box">
-            <h5 style="color: #94a3b8; margin: 0 0 6px 0; font-size: 0.9rem;">{title}</h5>
-            <h3 style="margin: 0; font-size: 1.6rem; color: #f1f5f9;">{value}</h3>
-            {extra}
-        </div>
-    """, unsafe_allow_html=True)
 
-def render_status_badge(text, status="neutral"):
-    st.markdown(f'<div class="{status}" style="display:inline-block; padding: 6px 14px; border-radius: 14px; border: 1px solid currentColor;">{text}</div>', unsafe_allow_html=True)
+def percent_text(value: float) -> str:
+    return f"{value:+.2f}%"
 
-def quantum_loading():
-    box = st.empty()
-    frames = [
-        "⚛️ Extracting historical joint factor distribution...",
-        "⚛️ Reconstructing empirical correlation structures...",
-        "⚛️ Loading statevector amplitudes into multi-register quantum circuit...",
-        "⚛️ Executing Aer simulator measurement loops..."
-    ]
-    for frame in frames:
-        box.markdown(f'<div class="metric-box"><h3>{frame}</h3></div>', unsafe_allow_html=True)
-        time.sleep(0.3)
-    box.empty()
 
-def reset_forecast_state():
-    for key, value in DEFAULT_STATE.items():
-        st.session_state[key] = value
-    gc.collect()
+def metric_card(label: str, value: str, detail: str = "", tone: str = "neutral") -> None:
+    st.markdown(
+        f'<div class="metric-card"><div class="metric-label">{html.escape(label)}</div>'
+        f'<div class="metric-value {tone}">{html.escape(value)}</div>'
+        f'<div class="metric-detail">{html.escape(detail)}</div></div>',
+        unsafe_allow_html=True,
+    )
 
-# Sidebar Setup
-st.sidebar.title("⚛️ Controls")
-search_query = st.sidebar.text_input("Search Ticker/Company", "Microsoft")
-try: search_results = search_stocks(search_query)
-except: search_results = []
 
-if search_results:
-    selected = st.sidebar.selectbox("Select Asset", search_results, format_func=lambda x: x.get("label", x.get("symbol", "Unknown")))
-    ticker = selected.get("symbol", search_query).upper()
-    company_name = selected.get("name", ticker)
-else:
-    ticker = search_query.upper()
-    company_name = ticker
+def reset_app() -> None:
+    clear_data_cache()
+    for state_key, default_value in DEFAULT_STATE.items():
+        st.session_state[state_key] = default_value
 
-forecast_days = st.sidebar.selectbox("Forecast Horizon", [1, 2, 7, 30, 60, 90], index=3)
-shots = st.sidebar.slider("Quantum Sampling Shots", 500, 3000, 1500, step=500)
-run_button = st.sidebar.button("🚀 Execute Quantum Forecast")
-clear_button = st.sidebar.button("🧹 Reset System")
 
-if clear_button:
-    reset_forecast_state()
-    st.rerun()
+def forecast_chart(forecast: dict) -> None:
+    grid = np.asarray(forecast["price_grid"], dtype=float)
+    probability = np.asarray(forecast["probability"], dtype=float)
+    fig, axis = plt.subplots(figsize=(10, 3.6))
+    fig.patch.set_facecolor("#ffffff")
+    axis.set_facecolor("#ffffff")
+    axis.plot(grid, probability, color="#2563eb", linewidth=2.5)
+    axis.fill_between(grid, probability, color="#2563eb", alpha=0.12)
+    axis.axvline(forecast["starting_price"], color="#98a2b3", linewidth=1.2, linestyle="--", label="Current price")
+    axis.axvline(forecast["expected_price"], color="#087443", linewidth=1.4, linestyle="--", label="Forecast")
+    axis.set_xlabel("Possible future price")
+    axis.set_ylabel("Relative likelihood")
+    axis.grid(axis="y", color="#eaecf0", linewidth=.8)
+    axis.spines[["top", "right"]].set_visible(False)
+    axis.legend(frameon=False, loc="upper right")
+    st.pyplot(fig, use_container_width=True)
+    plt.close(fig)
 
-# Load Caches
+
+apply_app_style()
+
+with st.sidebar:
+    st.header("Find a stock")
+    search_query = st.text_input("Company or ticker", value="Microsoft", placeholder="e.g., Apple or AAPL")
+    try:
+        search_results = search_stocks(search_query)
+    except Exception:
+        search_results = []
+    if search_results:
+        selected = st.selectbox("Select a result", search_results, format_func=lambda item: item.get("label", item.get("symbol", "Unknown")))
+        ticker = selected.get("symbol", search_query).upper()
+        company_name = selected.get("name", ticker)
+    else:
+        ticker = search_query.upper().strip()
+        company_name = ticker
+
+    forecast_days = st.selectbox("Forecast period", list(HORIZON_LABELS), index=3, format_func=HORIZON_LABELS.get)
+    run_button = st.button("Create forecast", type="primary")
+    if st.button("Clear saved view"):
+        reset_app()
+        st.rerun()
+    st.caption("Forecasts are estimates, not investment advice.")
+
 live_data = get_live_price(ticker) or {}
 company = get_company_info(ticker) or {"name": company_name}
 current_price = safe_float(live_data.get("price"))
 daily_change = safe_float(live_data.get("change_percent"))
 
-# Top Banner Dashboard
-c1, c2, c3 = st.columns(3)
-with c1: metric_card("Company", company.get("name", ticker))
-with c2: metric_card("Live Price", format_price(current_price) if current_price else "N/A")
-with c3: metric_card("Daily Change", format_percent(daily_change) if live_data else "N/A", daily_change if live_data else None)
+st.title(company.get("name", company_name))
+st.caption(f"{ticker} · Prices may be delayed · Updated {datetime.now().strftime('%I:%M %p')}")
 
-st.caption(f"Last Price Sync: {datetime.now().strftime('%H:%M:%S')} | Target Ticker: {ticker}")
+summary_columns = st.columns(3)
+with summary_columns[0]:
+    metric_card("Current price", format_price(current_price) if current_price else "Unavailable", "Latest available quote")
+with summary_columns[1]:
+    change_tone = "positive" if daily_change > 0 else "negative" if daily_change < 0 else "neutral"
+    metric_card("Today", percent_text(daily_change) if live_data else "Unavailable", "Change from prior close", change_tone)
+with summary_columns[2]:
+    metric_card("Forecast period", HORIZON_LABELS[forecast_days], "Choose a period in the sidebar")
 
 market_data = get_stock_data(ticker)
 spy_data = get_stock_data("SPY")
 sector_etf = get_sector_etf(ticker)
 sector_data = get_stock_data(sector_etf) if sector_etf else pd.DataFrame()
 
-if market_data.empty or "Close" not in market_data.columns:
-    st.error("Historical market records unavailable.")
+if market_data.empty or not validate_market_data(market_data):
+    st.error("We could not load enough reliable price history for this symbol. Try a listed U.S. stock or ETF.")
     st.stop()
 
+market_data = market_data.copy()
 market_data["Close"] = pd.to_numeric(market_data["Close"], errors="coerce")
 market_data = market_data.replace([np.inf, -np.inf], np.nan).dropna(subset=["Close"])
-
-with st.expander("📈 Historical Price Action Feed"):
-    recent = market_data.tail(50).copy()
-    recent["Return %"] = recent["Close"].pct_change() * 100
-    st.dataframe(recent, width="stretch")
-
-market_data_features = add_features(market_data)
-quantum_inputs = extract_inputs(market_data_features)
-
-if not validate_inputs(market_data_features, quantum_inputs):
-    st.error("Feature space validation failed.")
+features = add_features(market_data)
+if not validate_inputs(features, extract_inputs(features)):
+    st.error("The available history is incomplete. Please try another stock.")
     st.stop()
 
-with st.expander("⚛️ Input State Representation Vector"):
-    st.dataframe(pd.DataFrame({"Feature": list(quantum_inputs.keys()), "Value": list(quantum_inputs.values())}), width="stretch")
-
-# Run Button trigger
 if run_button:
-    exec_price = safe_float(current_price) if current_price else safe_float(market_data["Close"].iloc[-1])
+    base_price = current_price or safe_float(market_data["Close"].iloc[-1])
     try:
-        quantum_loading()
-        with st.spinner("Processing multi-factor register entanglement..."):
-            result = quantum_joint_forecast(market_data, exec_price, days=forecast_days, shots=shots, spy_data=spy_data, sector_data=sector_data)
-        
-        pred_id = store_prediction(ticker, forecast_days, exec_price, result["expected_price"])
-        st.session_state.forecast = result
-        st.session_state.forecast_settings = [ticker, forecast_days, shots]
-        st.session_state.last_run = datetime.now().strftime("%H:%M:%S")
-        st.session_state.last_price = exec_price
-        st.session_state.prediction_id = pred_id
-        st.success("Analysis successfully finalized.")
-    except Exception as err:
-        st.error(f"Execution Error: {err}")
-        st.stop()
+        with st.spinner("Reviewing price history and market context…"):
+            raw_forecast = quantum_joint_forecast(
+                market_data, base_price, days=forecast_days, shots=1500,
+                spy_data=spy_data, sector_data=sector_data,
+            )
+        learned_bias = get_prediction_adjustment(ticker, forecast_days)
+        forecast = apply_learning_adjustment(raw_forecast, learned_bias)
+        prediction_id = store_prediction(ticker, forecast_days, base_price, forecast["expected_price"])
+        st.session_state.forecast = forecast
+        st.session_state.forecast_settings = (ticker, forecast_days)
+        st.session_state.prediction_id = prediction_id
+        st.success("Forecast ready.")
+    except Exception:
+        st.error("We could not complete this forecast. Please try again in a moment.")
 
 forecast = st.session_state.forecast
-adaptive_adjustment = get_prediction_adjustment(ticker)
+settings = st.session_state.forecast_settings
+if forecast is not None and settings and settings[0] != ticker:
+    forecast = None
 
-if forecast:
-    forecast["adaptive_adjustment"] = adaptive_adjustment
-    forecast["adjusted_price"] = forecast["expected_price"] * (1 + adaptive_adjustment)
+if forecast is None:
+    st.info("Choose a stock and forecast period, then select **Create forecast**.")
+    st.stop()
 
-with st.sidebar.expander("🧠 Model Learning Bias Feed"):
-    st.write(f"Active Ticker: {ticker}")
-    st.write(f"Adaptive Ticker Bias: {adaptive_adjustment:+.4f}")
+expected_move = (forecast["expected_price"] / forecast["starting_price"] - 1) * 100
+risk = forecast["risk_score"]
+risk_label = "Lower" if risk < 3.5 else "Moderate" if risk < 6.5 else "Higher"
+outlook = forecast.get("market_regime", "Neutral")
 
-# Layout Results View
-if forecast is not None:
-    expected_return = (forecast["expected_price"] / forecast["starting_price"] - 1) * 100
-    c1, c2, c3, c4 = st.columns(4)
-    with c1: metric_card("Expected Price", format_price(forecast["expected_price"]))
-    with c2: metric_card("Horizon Drift (Return)", f"{expected_return:+.2f}%", expected_return)
-    with c3: metric_card("Decision Confidence", f"{forecast['confidence_score']:.1f}%")
-    with c4: metric_card("State Risk Score", f"{forecast['risk_score']:.2f}")
-    
-    st.divider()
-    meta = forecast.get("model_metadata", {})
-    st.caption(f"⚙️ Simulation Details: {meta.get('total_qubits','?')} qubits ({meta.get('qubits_per_factor','?')} qubits/factor) "
-               f"· Quantum State Entropy: {meta.get('quantum_entropy','N/A')} "
-               f"· Entanglement Coupling Score: {meta.get('entanglement_score','N/A')}% "
-               f"· Macro context: {'Included' if meta.get('macro_available') else 'Degraded (3-factor mode)'} "
-               f"· Sampler: {'Classical Fallback' if meta.get('fallback_to_classical') else 'Qiskit Simulator'}")
-    
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        regime = forecast.get("market_regime", "Unknown")
-        render_status_badge(regime, {"Bullish": "positive", "Bearish": "negative", "Neutral": "neutral"}.get(regime, "neutral"))
-    with c2: st.metric("Upside Probability (>+5%)", f"{forecast['upside_probability']:.2f}%")
-    with c3: st.metric("Downside Probability (<-5%)", f"{forecast['downside_probability']:.2f}%")
-    
-    # Probability Distribution Plotting
-    st.subheader("⚛️ Price Return Probability Density (Marginalized Statevector)")
-    fig, ax = plt.subplots(figsize=(10, 3.5))
-    fig.patch.set_facecolor('#0f172a')
-    ax.set_facecolor('#0f172a')
-    ax.plot(forecast["price_grid"], forecast["probability"], color='#22d3ee', linewidth=2)
-    ax.fill_between(forecast["price_grid"], forecast["probability"], color='#22d3ee', alpha=0.15)
-    ax.set_xlabel("Predicted Future Price ($)", color='#cbd5e1')
-    ax.set_ylabel("Measured Density", color='#cbd5e1')
-    ax.tick_params(colors='#cbd5e1')
-    ax.grid(True, color='#334155', linestyle='--', alpha=0.4)
-    st.pyplot(fig, clear_figure=True)
-    plt.close(fig)
-    
-    # Conditional Probabilities Breakdowns
-    st.subheader("🔗 Multi-Factor Joint Conditionals")
-    st.caption("Derived directly from the entangled multi-factor system state. Explores the impact of extreme register regimes on price density.")
-    conds = forecast.get("conditionals", {})
-    if conds:
-        rows = []
-        labels_map = {"volatility": "Volatility Register", "momentum": "Momentum Register", "macro": "Macro/Sector Register"}
-        for factor, vals in conds.items():
-            rows.append({
-                "Factor Register": labels_map.get(factor, factor),
-                "P(Drop > 5%) | Extreme High": f"{vals['p_drop_given_high']*100:.1f}%" if vals.get('p_drop_given_high') is not None else "N/A",
-                "P(Drop > 5%) | Extreme Low": f"{vals['p_drop_given_low']*100:.1f}%" if vals.get('p_drop_given_low') is not None else "N/A",
-                "Unconditional P(Drop > 5%)": f"{vals['p_drop_unconditional']*100:.1f}%"
-            })
-        st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
-    else:
-        st.info("Conditional metrics unavailable for 3-factor mode.")
-        
-    # Heatmap Block
-    st.subheader("🌐 Joint Distribution Heatmap (Price Return × Volatility)")
-    try:
-        active_factors = meta.get("active_factors", [])
-        j_prob, j_shape = forecast.get("joint_probability"), forecast.get("joint_shape")
-        if j_prob is not None and j_shape and "price_return" in active_factors and "volatility" in active_factors:
-            j_nd = np.array(j_prob).reshape(j_shape)
-            p_ax, v_ax = active_factors.index("price_return"), active_factors.index("volatility")
-            other_axes = tuple(i for i in range(len(active_factors)) if i not in (p_ax, v_ax))
-            heat = j_nd.sum(axis=other_axes)
-            if p_ax < v_ax: heat = heat.T
-            
-            fig2, ax2 = plt.subplots(figsize=(8, 4.5))
-            fig2.patch.set_facecolor('#0f172a')
-            ax2.set_facecolor('#0f172a')
-            im = ax2.imshow(heat, aspect="auto", origin="lower", cmap="plasma")
-            ax2.set_xlabel("Price Return Quantile Bin", color='#cbd5e1')
-            ax2.set_ylabel("Volatility Quantile Bin", color='#cbd5e1')
-            ax2.tick_params(colors='#cbd5e1')
-            cb = fig2.colorbar(im, ax=ax2)
-            cb.ax.yaxis.set_tick_params(color='#cbd5e1')
-            cb.ax.yaxis.label.set_color('#cbd5e1')
-            st.pyplot(fig2, clear_figure=True)
-            plt.close(fig2)
-        else:
-            st.info("Bivariate space map unavailable.")
-    except Exception as heatmap_err:
-        st.warning(f"Heatmap plotting aborted: {heatmap_err}")
-        
-    # Prediction Feedback Block
-    st.subheader("🧠 Closed-Loop Self-Learning Adjustment Feed")
-    st.caption("Feed realized results back into the adaptive memory matrix. The model calculates localized prediction biases and shifts future expectations.")
-    pred_id = st.session_state.prediction_id
-    if pred_id:
-        complete_prediction(pred_id)
-        st.success("Automatic settlement check completed.")
-    else:
-        st.info("Initiate a forecast to log predictions.")
+st.divider()
+st.subheader("Your forecast")
+forecast_columns = st.columns(4)
+with forecast_columns[0]:
+    metric_card("Expected price", format_price(forecast["expected_price"]), f"Over {HORIZON_LABELS[settings[1]].lower()}")
+with forecast_columns[1]:
+    movement_tone = "positive" if expected_move > 0 else "negative" if expected_move < 0 else "neutral"
+    metric_card("Expected move", percent_text(expected_move), "From the current price", movement_tone)
+with forecast_columns[2]:
+    metric_card("Forecast confidence", f"{forecast['confidence_score']:.0f}/100", "Higher means a more concentrated estimate")
+with forecast_columns[3]:
+    metric_card("Market risk", risk_label, "Based on recent price swings")
 
-    with st.expander("📄 Export Forecast"):
-        report = create_forecast_report(forecast)
-        st.download_button("Download Forecast CSV", report.to_csv(index=False), file_name=f"{ticker}_forecast.csv", mime="text/csv")
+st.markdown(f'<span class="outlook">Market outlook: {html.escape(outlook)}</span>', unsafe_allow_html=True)
+st.subheader("Possible price range")
+st.caption("This shows the range of outcomes the model considers more or less likely. It is not a guarantee.")
+forecast_chart(forecast)
+
+probability_columns = st.columns(3)
+with probability_columns[0]:
+    metric_card("Chance of a gain above 5%", f"{forecast['upside_probability']:.0f}%", "Within the forecast period")
+with probability_columns[1]:
+    metric_card("Chance of a loss above 5%", f"{forecast['downside_probability']:.0f}%", "Within the forecast period")
+with probability_columns[2]:
+    metric_card("Most likely range", f"{forecast['neutral_probability']:.0f}%", "Moves between −5% and +5%")
+
+if abs(forecast.get("adaptive_adjustment", 0.0)) >= 0.001:
+    st.caption("This forecast incorporates the model’s results from comparable, previously settled forecasts.")
+
+with st.expander("Forecast details"):
+    st.write(f"Uses {len(market_data)} recent market sessions plus broad-market and sector context when available.")
+    st.dataframe(market_data[["Date", "Close"]].tail(30).rename(columns={"Close": "Closing price"}), use_container_width=True, hide_index=True)
+    report = create_forecast_report(forecast)
+    st.download_button("Download forecast summary (CSV)", report.to_csv(index=False), file_name=f"{ticker}_forecast.csv", mime="text/csv")
