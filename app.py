@@ -44,30 +44,31 @@ for state_key, default_value in DEFAULT_STATE.items():
 
 def apply_app_style(theme: str) -> None:
     if theme == "Dark":
-        bg_color = "#0e1117"
-        sidebar_bg = "#262730"
-        text_color = "#fafafa"
+        bg_gradient = "linear-gradient(135deg, #0f172a 0%, #1e293b 100%)"
+        sidebar_bg = "#1e293b"
+        text_color = "#f1f5f9"
         header_color = "#ffffff"
-        input_bg = "#2b2b36"
+        input_bg = "#334155"
         input_text = "#ffffff"
-        border_color = "#4b4c53"
-        card_bg = "#1e1e24"
+        card_bg = "linear-gradient(145deg, #1e293b, #283548)"
+        card_shadow = "0 4px 15px rgba(0, 0, 0, 0.25)"
+        border_color = "#334155"
     else:
-        bg_color = "#f7f9fc"
+        bg_gradient = "linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)"
         sidebar_bg = "#ffffff"
-        text_color = "#172033"
-        header_color = "#14213d"
-        input_bg = "#ffffff"
-        input_text = "#14213d"
-        border_color = "#cbd5e1"
+        text_color = "#334155"
+        header_color = "#0f172a"
+        input_bg = "#1e293b"  # Kept dark for contrast in light mode
+        input_text = "#ffffff" # White text for dark inputs
         card_bg = "#ffffff"
+        card_shadow = "0 4px 15px rgba(0, 0, 0, 0.05)"
+        border_color = "#e2e8f0"
 
     st.markdown(
         f"""
         <style>
         .stApp {{
-            background: {bg_color};
-            color: {text_color};
+            background: {bg_gradient};
         }}
 
         section[data-testid="stSidebar"] {{
@@ -78,31 +79,33 @@ def apply_app_style(theme: str) -> None:
         h1, h2, h3 {{
             color: {header_color} !important;
             letter-spacing: -0.02em;
+            font-weight: 700;
         }}
 
-        label, p, span, div {{
+        /* Removed div from here to prevent breaking the toggle slider */
+        label, p, span {{
             color: {text_color};
         }}
 
         div[data-baseweb="input"] {{
             background: {input_bg};
-            border: 1px solid {border_color};
-            border-radius: 8px;
+            border: 1px solid transparent;
+            border-radius: 12px;
         }}
 
         div[data-baseweb="input"] input {{
             color: {input_text} !important;
-            background: {input_bg} !important;
+            background: transparent !important;
         }}
 
         div[data-baseweb="input"] input::placeholder {{
-            color: #64748b !important;
+            color: #94a3b8 !important;
         }}
 
         div[data-baseweb="select"] > div {{
             background: {input_bg};
-            border: 1px solid {border_color};
-            border-radius: 8px;
+            border: 1px solid transparent;
+            border-radius: 12px;
         }}
 
         div[data-baseweb="select"] span {{
@@ -111,6 +114,7 @@ def apply_app_style(theme: str) -> None:
 
         ul[role="listbox"] {{
             background: {input_bg};
+            border-radius: 8px;
         }}
 
         ul[role="listbox"] li {{
@@ -118,69 +122,71 @@ def apply_app_style(theme: str) -> None:
         }}
 
         .stButton > button {{
-            background: #1d4ed8;
+            background: linear-gradient(135deg, #2563eb, #1d4ed8);
             color: #ffffff !important;
             border: 0;
-            border-radius: 9px;
+            border-radius: 12px;
             font-weight: 650;
-            padding: .55rem 1rem;
+            padding: .6rem 1.2rem;
             width: 100%;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+            transition: transform 0.1s ease, box-shadow 0.1s ease;
         }}
 
         .stButton > button:hover {{
-            background: #1e40af;
-            color: #ffffff !important;
+            transform: translateY(-1px);
+            box-shadow: 0 6px 16px rgba(37, 99, 235, 0.3);
         }}
 
         .metric-card {{
             background: {card_bg};
-            border: 1px solid {border_color};
-            border-radius: 12px;
-            padding: 16px 18px;
+            border-radius: 16px;
+            padding: 20px;
             min-height: 112px;
-            box-shadow: 0 2px 8px rgba(15, 23, 42, .04);
+            box-shadow: {card_shadow};
+            transition: transform 0.2s ease;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }}
+
+        .metric-card:hover {{
+            transform: translateY(-2px);
         }}
 
         .metric-label {{
-            color: #667085;
-            font-size: .82rem;
+            color: #64748b;
+            font-size: .85rem;
             font-weight: 650;
-            margin-bottom: 7px;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
         }}
 
         .metric-value {{
             color: {header_color};
-            font-size: 1.55rem;
-            font-weight: 750;
-            line-height: 1.2;
+            font-size: 1.75rem;
+            font-weight: 800;
+            line-height: 1.1;
         }}
 
         .metric-detail {{
-            color: #667085;
-            font-size: .82rem;
-            margin-top: 6px;
+            color: #64748b;
+            font-size: .85rem;
+            margin-top: 8px;
         }}
 
-        .positive {{
-            color: #087443;
-        }}
-
-        .negative {{
-            color: #b42318;
-        }}
-
-        .neutral {{
-            color: #475467;
-        }}
+        .positive {{ color: #10b981; }}
+        .negative {{ color: #ef4444; }}
+        .neutral {{ color: #64748b; }}
 
         .outlook {{
             display: inline-block;
-            padding: 6px 11px;
+            padding: 8px 16px;
             border-radius: 999px;
-            font-weight: 650;
-            font-size: .87rem;
-            background: #eef4ff;
-            color: #1d4ed8;
+            font-weight: 700;
+            font-size: .9rem;
+            background: linear-gradient(135deg, #eff6ff, #dbeafe);
+            color: #1e40af;
+            box-shadow: 0 2px 8px rgba(29, 78, 216, 0.1);
         }}
         </style>
         """,
@@ -221,16 +227,16 @@ def forecast_chart(forecast: dict, theme: str) -> None:
     probability = np.asarray(forecast["probability"], dtype=float)
     fig, axis = plt.subplots(figsize=(10, 3.6))
 
-    bg_color = "#1e1e24" if theme == "Dark" else "#ffffff"
-    text_color = "#fafafa" if theme == "Dark" else "#172033"
-    grid_color = "#32323d" if theme == "Dark" else "#eaecf0"
+    bg_color = "#1e293b" if theme == "Dark" else "#ffffff"
+    text_color = "#f8fafc" if theme == "Dark" else "#334155"
+    grid_color = "#334155" if theme == "Dark" else "#e2e8f0"
 
     fig.patch.set_facecolor(bg_color)
     axis.set_facecolor(bg_color)
     axis.plot(grid, probability, color="#2563eb", linewidth=2.5)
     axis.fill_between(grid, probability, color="#2563eb", alpha=0.12)
     axis.axvline(forecast["starting_price"], color="#98a2b3", linewidth=1.2, linestyle="--", label="Current price")
-    axis.axvline(forecast["expected_price"], color="#087443", linewidth=1.4, linestyle="--", label="Forecast")
+    axis.axvline(forecast["expected_price"], color="#10b981", linewidth=1.4, linestyle="--", label="Forecast")
     
     axis.set_xlabel("Possible future price", color=text_color)
     axis.set_ylabel("Relative likelihood", color=text_color)
@@ -238,7 +244,7 @@ def forecast_chart(forecast: dict, theme: str) -> None:
     axis.grid(axis="y", color=grid_color, linewidth=.8)
     axis.spines[["top", "right"]].set_visible(False)
     for spine in axis.spines.values():
-        spine.set_edgecolor(text_color)
+        spine.set_edgecolor(grid_color)
         
     legend = axis.legend(frameon=False, loc="upper right")
     for text in legend.get_texts():
