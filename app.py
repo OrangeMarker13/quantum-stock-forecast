@@ -36,68 +36,88 @@ HORIZON_LABELS = {
     60: "3 months (60 trading days)",
     90: "About 4 months (90 trading days)",
 }
-DEFAULT_STATE = {"forecast": None, "forecast_settings": None, "prediction_id": None}
+
+DEFAULT_STATE = {"forecast": None, "forecast_settings": None, "prediction_id": None, "theme": "Dark"}
 for state_key, default_value in DEFAULT_STATE.items():
     st.session_state.setdefault(state_key, default_value)
 
 
-def apply_app_style() -> None:
+def apply_app_style(theme: str) -> None:
+    if theme == "Dark":
+        bg_color = "#0e1117"
+        sidebar_bg = "#262730"
+        text_color = "#fafafa"
+        header_color = "#ffffff"
+        input_bg = "#2b2b36"
+        input_text = "#ffffff"
+        border_color = "#4b4c53"
+        card_bg = "#1e1e24"
+    else:
+        bg_color = "#f7f9fc"
+        sidebar_bg = "#ffffff"
+        text_color = "#172033"
+        header_color = "#14213d"
+        input_bg = "#ffffff"
+        input_text = "#14213d"
+        border_color = "#cbd5e1"
+        card_bg = "#ffffff"
+
     st.markdown(
-        """
+        f"""
         <style>
-        .stApp {
-            background: #f7f9fc;
-            color: #172033;
-        }
+        .stApp {{
+            background: {bg_color};
+            color: {text_color};
+        }}
 
-        section[data-testid="stSidebar"] {
-            background: #ffffff;
-            border-right: 1px solid #e5eaf2;
-        }
+        section[data-testid="stSidebar"] {{
+            background: {sidebar_bg};
+            border-right: 1px solid {border_color};
+        }}
 
-        h1, h2, h3 {
-            color: #14213d !important;
+        h1, h2, h3 {{
+            color: {header_color} !important;
             letter-spacing: -0.02em;
-        }
+        }}
 
-        label, p, span, div {
-            color: #172033;
-        }
+        label, p, span, div {{
+            color: {text_color};
+        }}
 
-        div[data-baseweb="input"] {
-            background: #ffffff;
-            border: 1px solid #cbd5e1;
+        div[data-baseweb="input"] {{
+            background: {input_bg};
+            border: 1px solid {border_color};
             border-radius: 8px;
-        }
+        }}
 
-        div[data-baseweb="input"] input {
-            color: #14213d !important;
-            background: #ffffff !important;
-        }
+        div[data-baseweb="input"] input {{
+            color: {input_text} !important;
+            background: {input_bg} !important;
+        }}
 
-        div[data-baseweb="input"] input::placeholder {
+        div[data-baseweb="input"] input::placeholder {{
             color: #64748b !important;
-        }
+        }}
 
-        div[data-baseweb="select"] > div {
-            background: #ffffff;
-            border: 1px solid #cbd5e1;
+        div[data-baseweb="select"] > div {{
+            background: {input_bg};
+            border: 1px solid {border_color};
             border-radius: 8px;
-        }
+        }}
 
-        div[data-baseweb="select"] span {
-            color: #14213d !important;
-        }
+        div[data-baseweb="select"] span {{
+            color: {input_text} !important;
+        }}
 
-        ul[role="listbox"] {
-            background: #ffffff;
-        }
+        ul[role="listbox"] {{
+            background: {input_bg};
+        }}
 
-        ul[role="listbox"] li {
-            color: #14213d !important;
-        }
+        ul[role="listbox"] li {{
+            color: {input_text} !important;
+        }}
 
-        .stButton > button {
+        .stButton > button {{
             background: #1d4ed8;
             color: #ffffff !important;
             border: 0;
@@ -105,55 +125,55 @@ def apply_app_style() -> None:
             font-weight: 650;
             padding: .55rem 1rem;
             width: 100%;
-        }
+        }}
 
-        .stButton > button:hover {
+        .stButton > button:hover {{
             background: #1e40af;
             color: #ffffff !important;
-        }
+        }}
 
-        .metric-card {
-            background: #ffffff;
-            border: 1px solid #e4e9f2;
+        .metric-card {{
+            background: {card_bg};
+            border: 1px solid {border_color};
             border-radius: 12px;
             padding: 16px 18px;
             min-height: 112px;
             box-shadow: 0 2px 8px rgba(15, 23, 42, .04);
-        }
+        }}
 
-        .metric-label {
+        .metric-label {{
             color: #667085;
             font-size: .82rem;
             font-weight: 650;
             margin-bottom: 7px;
-        }
+        }}
 
-        .metric-value {
-            color: #14213d;
+        .metric-value {{
+            color: {header_color};
             font-size: 1.55rem;
             font-weight: 750;
             line-height: 1.2;
-        }
+        }}
 
-        .metric-detail {
+        .metric-detail {{
             color: #667085;
             font-size: .82rem;
             margin-top: 6px;
-        }
+        }}
 
-        .positive {
+        .positive {{
             color: #087443;
-        }
+        }}
 
-        .negative {
+        .negative {{
             color: #b42318;
-        }
+        }}
 
-        .neutral {
+        .neutral {{
             color: #475467;
-        }
+        }}
 
-        .outlook {
+        .outlook {{
             display: inline-block;
             padding: 6px 11px;
             border-radius: 999px;
@@ -161,7 +181,7 @@ def apply_app_style() -> None:
             font-size: .87rem;
             background: #eef4ff;
             color: #1d4ed8;
-        }
+        }}
         </style>
         """,
         unsafe_allow_html=True,
@@ -192,29 +212,49 @@ def metric_card(label: str, value: str, detail: str = "", tone: str = "neutral")
 def reset_app() -> None:
     clear_data_cache()
     for state_key, default_value in DEFAULT_STATE.items():
-        st.session_state[state_key] = default_value
+        if state_key != "theme":
+            st.session_state[state_key] = default_value
 
 
-def forecast_chart(forecast: dict) -> None:
+def forecast_chart(forecast: dict, theme: str) -> None:
     grid = np.asarray(forecast["price_grid"], dtype=float)
     probability = np.asarray(forecast["probability"], dtype=float)
     fig, axis = plt.subplots(figsize=(10, 3.6))
-    fig.patch.set_facecolor("#ffffff")
-    axis.set_facecolor("#ffffff")
+
+    bg_color = "#1e1e24" if theme == "Dark" else "#ffffff"
+    text_color = "#fafafa" if theme == "Dark" else "#172033"
+    grid_color = "#32323d" if theme == "Dark" else "#eaecf0"
+
+    fig.patch.set_facecolor(bg_color)
+    axis.set_facecolor(bg_color)
     axis.plot(grid, probability, color="#2563eb", linewidth=2.5)
     axis.fill_between(grid, probability, color="#2563eb", alpha=0.12)
     axis.axvline(forecast["starting_price"], color="#98a2b3", linewidth=1.2, linestyle="--", label="Current price")
     axis.axvline(forecast["expected_price"], color="#087443", linewidth=1.4, linestyle="--", label="Forecast")
-    axis.set_xlabel("Possible future price")
-    axis.set_ylabel("Relative likelihood")
-    axis.grid(axis="y", color="#eaecf0", linewidth=.8)
+    
+    axis.set_xlabel("Possible future price", color=text_color)
+    axis.set_ylabel("Relative likelihood", color=text_color)
+    axis.tick_params(colors=text_color)
+    axis.grid(axis="y", color=grid_color, linewidth=.8)
     axis.spines[["top", "right"]].set_visible(False)
-    axis.legend(frameon=False, loc="upper right")
+    for spine in axis.spines.values():
+        spine.set_edgecolor(text_color)
+        
+    legend = axis.legend(frameon=False, loc="upper right")
+    for text in legend.get_texts():
+        text.set_color(text_color)
+        
     st.pyplot(fig, use_container_width=True)
     plt.close(fig)
 
 
-apply_app_style()
+col_empty, col_toggle = st.columns([8, 2])
+with col_toggle:
+    is_dark = st.toggle("Dark Mode", value=(st.session_state.theme == "Dark"))
+    st.session_state.theme = "Dark" if is_dark else "Light"
+
+apply_app_style(st.session_state.theme)
+
 with st.sidebar:
     st.header("Find a stock")
     search_query = st.text_input("Company or ticker", value="Microsoft", placeholder="e.g., Apple or AAPL")
@@ -247,8 +287,6 @@ with st.sidebar:
         st.rerun()
 
     st.caption("Forecasts are estimates, not investment advice.")
-
-
 live_data = get_live_price(ticker) or {}
 company = get_company_info(ticker) or {"name": company_name}
 current_price = safe_float(live_data.get("price"))
@@ -403,7 +441,7 @@ st.caption(
     "This shows the range of outcomes the model considers more or less likely. It is not a guarantee."
 )
 
-forecast_chart(forecast)
+forecast_chart(forecast, st.session_state.theme)
 
 
 probability_columns = st.columns(3)
